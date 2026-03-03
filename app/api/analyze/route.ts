@@ -4,47 +4,118 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
 export async function POST(request: Request) {
-  const { appName, permissions, type, app1, app2 } = await request.json();
+  const { appName, permissions, type, app1, app2, scrapedData } = await request.json();
 
   if (!process.env.GOOGLE_AI_API_KEY) {
     console.warn('GOOGLE_AI_API_KEY is missing from environment variables.');
     return NextResponse.json({ error: 'Google AI API Key is not configured. Please create a .env.local file with GOOGLE_AI_API_KEY=your_key' }, { status: 500 });
   }
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
   try {
     let prompt = '';
 
     if (type === 'analyze') {
+      const appContext = scrapedData ? `
+Context: This is a "${scrapedData.genre}" app with a rating of ${scrapedData.score?.toFixed(1) || 'N/A'}.
+Description: ${scrapedData.summary || 'No description available.'}
+` : '';
+
       prompt = `
-        Analyze the privacy risks for the app "${appName}" which requests the following permissions: ${permissions.join(', ')}.
-        Provide a JSON response with the following structure:
-        {
-          "safe": ["list of permissions that are standard and low risk"],
-          "review": ["list of permissions that might be unnecessary or invasive"],
-          "highRisk": ["list of permissions that lead to privacy leakage"],
-          "summary": "A brief overall privacy assessment",
-          "recommendation": "Actionable advice for the user"
-        }
-        Only return the JSON.
-      `;
+You are a mobile security and privacy risk analyst.
+${appContext}
+Analyze the Android app "${appName}" which requests the following permissions:
+${permissions.join(', ')}
+
+Classify each permission into one of these categories:
+- Safe
+- Review Needed
+- High Risk
+
+For EACH permission provide:
+- riskLevel (Safe / Review / High Risk)
+- justification (clear reasoning why it belongs in that category)
+- potentialMisuse (realistic misuse scenarios)
+- severityScore (1-10, where 10 is extremely dangerous)
+- contextRelevance (Is this permission typically required for this type of app? Yes/No/Unclear)
+
+Then provide an overall assessment.
+
+Return STRICT JSON in this format:
+
+{
+  "permissions": [
+    {
+      "name": "permission name",
+      "riskLevel": "",
+      "justification": "",
+      "potentialMisuse": "",
+      "severityScore": 0,
+      "contextRelevance": ""
+    }
+  ],
+  "riskDistribution": {
+    "safeCount": 0,
+    "reviewCount": 0,
+    "highRiskCount": 0
+  },
+  "overallRiskScore": 0,
+  "summary": "",
+  "keyConcerns": ["Top 3 most concerning permissions"],
+  "recommendation": "",
+  "confidence": "Low/Medium/High"
+}
+
+Only return valid JSON. No explanations outside JSON.
+`;
     } else if (type === 'compare') {
       prompt = `
-        Compare the privacy and safety of two apps: "${app1}" and "${app2}".
-        Analyze their typical permission requests and data handling practices.
-        Provide a JSON response with the following structure:
-        {
-          "winner": "The name of the safer app",
-          "reasoning": "Detailed explanation of why it is safer",
-          "comparison": [
-            {"feature": "Data Collection", "app1": "description", "app2": "description"},
-            {"feature": "Permissions", "app1": "description", "app2": "description"}
-          ],
-          "finalVerdict": "A concluding safety recommendation"
-        }
-        Only return the JSON.
-      `;
+You are a cybersecurity expert comparing two Android applications.
+
+Compare "${app1}" and "${app2}" in terms of privacy and permission risks.
+
+Analyze:
+- Typical permissions requested
+- Sensitive data exposure risk
+- Over-permissioning patterns
+- Potential misuse scenarios
+- Overall privacy posture
+
+Return STRICT JSON in this format:
+
+{
+  "app1RiskScore": 0,
+  "app2RiskScore": 0,
+  "winner": "",
+  "reasoning": "",
+  "detailedComparison": [
+    {
+      "category": "Sensitive Permissions",
+      "app1": "",
+      "app2": ""
+    },
+    {
+      "category": "Data Exposure Risk",
+      "app1": "",
+      "app2": ""
+    },
+    {
+      "category": "Context Justification",
+      "app1": "",
+      "app2": ""
+    }
+  ],
+  "topConcerns": {
+    "app1": ["list"],
+    "app2": ["list"]
+  },
+  "finalVerdict": "",
+  "confidence": "Low/Medium/High"
+}
+
+Only return valid JSON.
+`;
     }
 
     const result = await model.generateContent(prompt);

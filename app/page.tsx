@@ -248,11 +248,22 @@ export default function Home() {
             {analysisResult && (
               <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-100 p-2 rounded-lg">
-                      <ShieldCheck className="w-6 h-6 text-indigo-600" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-indigo-100 p-2 rounded-lg">
+                        <ShieldCheck className="w-6 h-6 text-indigo-600" />
+                      </div>
+                      <h3 className="text-xl font-bold">Analysis Results for {appName}</h3>
                     </div>
-                    <h3 className="text-xl font-bold">Analysis Results for {appName}</h3>
+                    {analysisResult.overallRiskScore !== undefined && (
+                      <div className={cn(
+                        "px-4 py-2 rounded-xl font-bold text-white shadow-sm",
+                        analysisResult.overallRiskScore > 7 ? "bg-red-500" :
+                          analysisResult.overallRiskScore > 4 ? "bg-amber-500" : "bg-green-500"
+                      )}>
+                        Risk Score: {analysisResult.overallRiskScore}/10
+                      </div>
+                    )}
                   </div>
 
                   {analysisResult.error ? (
@@ -267,43 +278,83 @@ export default function Home() {
                   ) : (
                     <>
                       <div className="grid md:grid-cols-3 gap-6">
+                        {/* Safe */}
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-green-600 font-bold">
                             <CheckCircle2 className="w-5 h-5" />
                             <h4>Safe</h4>
                           </div>
                           <ul className="text-sm text-slate-600 space-y-1">
-                            {analysisResult.safe?.map((p: string, i: number) => <li key={i} className="flex items-start gap-2">• {p}</li>)}
+                            {analysisResult.permissions?.filter((p: any) => p.riskLevel?.toLowerCase() === 'safe').map((p: any, i: number) => (
+                              <li key={i} className="flex items-start gap-2 group relative">
+                                <span className="mt-1 flex-shrink-0">•</span>
+                                <span className="cursor-help border-b border-dotted border-slate-300" title={p.justification}>{p.name}</span>
+                              </li>
+                            ))}
                           </ul>
                         </div>
+                        {/* Review */}
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-amber-600 font-bold">
                             <Info className="w-5 h-5" />
                             <h4>Review Needed</h4>
                           </div>
                           <ul className="text-sm text-slate-600 space-y-1">
-                            {analysisResult.review?.map((p: string, i: number) => <li key={i} className="flex items-start gap-2">• {p}</li>)}
+                            {analysisResult.permissions?.filter((p: any) => p.riskLevel?.toLowerCase().includes('review')).map((p: any, i: number) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="mt-1 flex-shrink-0">•</span>
+                                <span className="cursor-help border-b border-dotted border-amber-300" title={p.justification}>{p.name}</span>
+                              </li>
+                            ))}
                           </ul>
                         </div>
+                        {/* High Risk */}
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-red-600 font-bold">
                             <AlertTriangle className="w-5 h-5" />
                             <h4>High Risk</h4>
                           </div>
                           <ul className="text-sm text-slate-600 space-y-1">
-                            {analysisResult.highRisk?.map((p: string, i: number) => <li key={i} className="flex items-start gap-2">• {p}</li>)}
+                            {analysisResult.permissions?.filter((p: any) => p.riskLevel?.toLowerCase().includes('high')).map((p: any, i: number) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="mt-1 flex-shrink-0">•</span>
+                                <span className="cursor-help border-b border-dotted border-red-300" title={`${p.justification} - Potential Misuse: ${p.potentialMisuse}`}>{p.name}</span>
+                              </li>
+                            ))}
                           </ul>
                         </div>
                       </div>
 
-                      <div className="pt-6 border-t border-slate-100 space-y-4">
-                        <div>
-                          <h4 className="font-bold text-slate-900">Summary</h4>
-                          <p className="text-slate-600 text-sm leading-relaxed">{analysisResult.summary}</p>
+                      <div className="pt-6 border-t border-slate-100 space-y-6">
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <h4 className="font-bold text-slate-900 mb-2">Technical Summary</h4>
+                            <p className="text-slate-600 text-sm leading-relaxed">{analysisResult.summary}</p>
+                          </div>
+                          {analysisResult.keyConcerns && (
+                            <div>
+                              <h4 className="font-bold text-slate-900 mb-2">Key Concerns</h4>
+                              <ul className="space-y-2">
+                                {analysisResult.keyConcerns.map((concern: string, i: number) => (
+                                  <li key={i} className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-2 rounded-lg border border-red-100">
+                                    <AlertTriangle className="w-4 h-4" />
+                                    {concern}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
-                        <div className="bg-indigo-50 p-4 rounded-xl">
-                          <h4 className="font-bold text-indigo-900">Recommendation</h4>
-                          <p className="text-indigo-700 text-sm leading-relaxed">{analysisResult.recommendation}</p>
+
+                        <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <h4 className="font-bold text-indigo-900">Expert Recommendation</h4>
+                            <p className="text-indigo-700 text-sm leading-relaxed">{analysisResult.recommendation}</p>
+                          </div>
+                          <div className="text-center px-4 py-2 bg-white rounded-lg border border-indigo-200 shadow-sm">
+                            <span className="text-[10px] uppercase font-bold text-indigo-400 block">Analysis Confidence</span>
+                            <span className="text-indigo-700 font-bold">{analysisResult.confidence || 'Medium'}</span>
+                          </div>
                         </div>
                       </div>
                     </>
@@ -395,34 +446,80 @@ export default function Home() {
                     </div>
                     <h3 className="text-xl font-bold">AI Recommendation</h3>
                   </div>
-                  <div className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold">
-                    Winner: {comparisonResult.winner}
+                  <div className="flex items-center gap-2">
+                    <div className="text-right mr-2">
+                      <div className="text-[10px] uppercase text-indigo-300 font-bold">Winner</div>
+                      <div className="text-green-400 font-bold">{comparisonResult.winner}</div>
+                    </div>
+                    <div className="bg-indigo-500/50 px-4 py-2 rounded-xl text-center">
+                      <div className="text-[10px] uppercase text-indigo-300">Confidence</div>
+                      <div className="text-sm font-bold">{comparisonResult.confidence || 'High'}</div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Why it's safer</h4>
-                  <p className="text-lg leading-relaxed">{comparisonResult.reasoning}</p>
-                </div>
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Security Comparison</h4>
+                    <p className="text-lg leading-relaxed">{comparisonResult.reasoning}</p>
 
-                <div className="grid gap-4">
-                  {comparisonResult.comparison?.map((item: any, i: number) => (
-                    <div key={i} className="bg-white/10 p-4 rounded-2xl grid md:grid-cols-[150px_1fr_1fr] gap-4 items-center">
-                      <span className="font-bold text-indigo-200">{item.feature}</span>
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase text-indigo-300">{compareApps.app1}</span>
-                        <p className="text-sm">{item.app1}</p>
+                    <div className="grid grid-cols-2 gap-4 pt-4">
+                      <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                        <div className="text-[10px] uppercase text-indigo-300 mb-1">{compareApps.app1}</div>
+                        <div className="text-2xl font-bold">{comparisonResult.app1RiskScore || 0}<span className="text-xs text-indigo-400">/10 Risk</span></div>
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase text-indigo-300">{compareApps.app2}</span>
-                        <p className="text-sm">{item.app2}</p>
+                      <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                        <div className="text-[10px] uppercase text-indigo-300 mb-1">{compareApps.app2}</div>
+                        <div className="text-2xl font-bold">{comparisonResult.app2RiskScore || 0}<span className="text-xs text-indigo-400">/10 Risk</span></div>
                       </div>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Top Concerns</h4>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <span className="text-[10px] uppercase text-indigo-400 font-bold">{compareApps.app1}</span>
+                        <div className="flex flex-wrap gap-2">
+                          {comparisonResult.topConcerns?.app1?.map((c: string, i: number) => (
+                            <span key={i} className="text-xs bg-red-500/20 text-red-200 px-2 py-1 rounded-md border border-red-500/30">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <span className="text-[10px] uppercase text-indigo-400 font-bold">{compareApps.app2}</span>
+                        <div className="flex flex-wrap gap-2">
+                          {comparisonResult.topConcerns?.app2?.map((c: string, i: number) => (
+                            <span key={i} className="text-xs bg-red-500/20 text-red-200 px-2 py-1 rounded-md border border-red-500/30">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Feature Breakdown</h4>
+                  <div className="grid gap-3">
+                    {comparisonResult.detailedComparison?.map((item: any, i: number) => (
+                      <div key={i} className="bg-white/5 p-4 rounded-2xl grid md:grid-cols-[160px_1fr_1fr] gap-4 items-center border border-white/5 hover:bg-white/10 transition-colors">
+                        <span className="font-bold text-indigo-200 text-sm">{item.category}</span>
+                        <div className="space-y-1">
+                          <p className="text-xs text-indigo-100">{item.app1}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-indigo-100">{item.app2}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="pt-6 border-t border-white/10">
-                  <p className="text-indigo-100 italic text-sm">" {comparisonResult.finalVerdict} "</p>
+                  <div className="flex items-start gap-3">
+                    <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-1" />
+                    <p className="text-indigo-100 italic text-sm">{comparisonResult.finalVerdict}</p>
+                  </div>
                 </div>
               </div>
             )}

@@ -1,0 +1,1 @@
+console.log("Your API Key is:", process.env.GOOGLE_AI_API_KEY);

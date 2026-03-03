@@ -15,6 +15,10 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: "PrivaGuard",
+  description: "AI-Powered Android App Privacy Risk Analyzer",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 export default function RootLayout({

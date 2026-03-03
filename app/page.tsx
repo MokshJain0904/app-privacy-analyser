@@ -256,12 +256,15 @@ export default function Home() {
                       <h3 className="text-xl font-bold">Analysis Results for {appName}</h3>
                     </div>
                     {analysisResult.overallRiskScore !== undefined && (
-                      <div className={cn(
-                        "px-4 py-2 rounded-xl font-bold text-white shadow-sm",
-                        analysisResult.overallRiskScore > 7 ? "bg-red-500" :
-                          analysisResult.overallRiskScore > 4 ? "bg-amber-500" : "bg-green-500"
-                      )}>
-                        Risk Score: {analysisResult.overallRiskScore}/10
+                      <div className="flex flex-col items-end">
+                        <div className={cn(
+                          "px-4 py-1 rounded-full font-bold text-white shadow-sm text-sm",
+                          analysisResult.overallRiskScore > 75 ? "bg-red-600" :
+                            analysisResult.overallRiskScore > 40 ? "bg-amber-500" : "bg-green-500"
+                        )}>
+                          {analysisResult.riskLabel} Risk
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-bold mt-1">Score: {analysisResult.overallRiskScore}/100</div>
                       </div>
                     )}
                   </div>
@@ -285,7 +288,7 @@ export default function Home() {
                             <h4>Safe</h4>
                           </div>
                           <ul className="text-sm text-slate-600 space-y-1">
-                            {analysisResult.permissions?.filter((p: any) => p.riskLevel?.toLowerCase() === 'safe').map((p: any, i: number) => (
+                            {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Safe').map((p: any, i: number) => (
                               <li key={i} className="flex items-start gap-2 group relative">
                                 <span className="mt-1 flex-shrink-0">•</span>
                                 <span className="cursor-help border-b border-dotted border-slate-300" title={p.justification}>{p.name}</span>
@@ -300,7 +303,7 @@ export default function Home() {
                             <h4>Review Needed</h4>
                           </div>
                           <ul className="text-sm text-slate-600 space-y-1">
-                            {analysisResult.permissions?.filter((p: any) => p.riskLevel?.toLowerCase().includes('review')).map((p: any, i: number) => (
+                            {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Review Needed').map((p: any, i: number) => (
                               <li key={i} className="flex items-start gap-2">
                                 <span className="mt-1 flex-shrink-0">•</span>
                                 <span className="cursor-help border-b border-dotted border-amber-300" title={p.justification}>{p.name}</span>
@@ -315,10 +318,10 @@ export default function Home() {
                             <h4>High Risk</h4>
                           </div>
                           <ul className="text-sm text-slate-600 space-y-1">
-                            {analysisResult.permissions?.filter((p: any) => p.riskLevel?.toLowerCase().includes('high')).map((p: any, i: number) => (
+                            {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'High Risk').map((p: any, i: number) => (
                               <li key={i} className="flex items-start gap-2">
                                 <span className="mt-1 flex-shrink-0">•</span>
-                                <span className="cursor-help border-b border-dotted border-red-300" title={`${p.justification} - Potential Misuse: ${p.potentialMisuse}`}>{p.name}</span>
+                                <span className="cursor-help border-b border-dotted border-red-300" title={`${p.justification} - Potential Misuse: ${p.potentialMisuse || 'N/A'}`}>{p.name}</span>
                               </li>
                             ))}
                           </ul>
@@ -348,8 +351,8 @@ export default function Home() {
 
                         <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="flex-1">
-                            <h4 className="font-bold text-indigo-900">Expert Recommendation</h4>
-                            <p className="text-indigo-700 text-sm leading-relaxed">{analysisResult.recommendation}</p>
+                            <h4 className="font-bold text-indigo-900">Expert Auditor Statement</h4>
+                            <p className="text-indigo-700 text-sm leading-relaxed">{analysisResult.recommendation || analysisResult.summary}</p>
                           </div>
                           <div className="text-center px-4 py-2 bg-white rounded-lg border border-indigo-200 shadow-sm">
                             <span className="text-[10px] uppercase font-bold text-indigo-400 block">Analysis Confidence</span>
@@ -444,33 +447,31 @@ export default function Home() {
                     <div className="bg-indigo-500/30 p-2 rounded-lg">
                       <ShieldCheck className="w-6 h-6" />
                     </div>
-                    <h3 className="text-xl font-bold">AI Recommendation</h3>
+                    <h3 className="text-xl font-bold">Deterministic Comparison</h3>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-right mr-2">
                       <div className="text-[10px] uppercase text-indigo-300 font-bold">Winner</div>
                       <div className="text-green-400 font-bold">{comparisonResult.winner}</div>
                     </div>
-                    <div className="bg-indigo-500/50 px-4 py-2 rounded-xl text-center">
-                      <div className="text-[10px] uppercase text-indigo-300">Confidence</div>
-                      <div className="text-sm font-bold">{comparisonResult.confidence || 'High'}</div>
-                    </div>
                   </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-8">
                   <div className="space-y-4">
-                    <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Security Comparison</h4>
-                    <p className="text-lg leading-relaxed">{comparisonResult.reasoning}</p>
+                    <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Security Analysis</h4>
+                    <p className="text-lg leading-relaxed">{comparisonResult.comparisonSummary}</p>
 
                     <div className="grid grid-cols-2 gap-4 pt-4">
                       <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
                         <div className="text-[10px] uppercase text-indigo-300 mb-1">{compareApps.app1}</div>
-                        <div className="text-2xl font-bold">{comparisonResult.app1RiskScore || 0}<span className="text-xs text-indigo-400">/10 Risk</span></div>
+                        <div className="text-2xl font-bold">{comparisonResult.app1Score || 0}<span className="text-xs text-indigo-400">/100</span></div>
+                        <div className="text-[10px] text-indigo-400 mt-1">{comparisonResult.app1Label} Risk</div>
                       </div>
                       <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
                         <div className="text-[10px] uppercase text-indigo-300 mb-1">{compareApps.app2}</div>
-                        <div className="text-2xl font-bold">{comparisonResult.app2RiskScore || 0}<span className="text-xs text-indigo-400">/10 Risk</span></div>
+                        <div className="text-2xl font-bold">{comparisonResult.app2Score || 0}<span className="text-xs text-indigo-400">/100</span></div>
+                        <div className="text-[10px] text-indigo-400 mt-1">{comparisonResult.app2Label} Risk</div>
                       </div>
                     </div>
                   </div>
@@ -499,26 +500,23 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-4 pt-4">
-                  <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Feature Breakdown</h4>
-                  <div className="grid gap-3">
-                    {comparisonResult.detailedComparison?.map((item: any, i: number) => (
-                      <div key={i} className="bg-white/5 p-4 rounded-2xl grid md:grid-cols-[160px_1fr_1fr] gap-4 items-center border border-white/5 hover:bg-white/10 transition-colors">
-                        <span className="font-bold text-indigo-200 text-sm">{item.category}</span>
-                        <div className="space-y-1">
-                          <p className="text-xs text-indigo-100">{item.app1}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-indigo-100">{item.app2}</p>
-                        </div>
-                      </div>
-                    ))}
+                  <h4 className="text-indigo-200 font-semibold uppercase tracking-wider text-xs">Risk Profiles</h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
+                      <h5 className="font-bold text-sm text-indigo-200 mb-2">{compareApps.app1}</h5>
+                      <p className="text-sm text-indigo-100">{comparisonResult.riskProfileComparison?.app1}</p>
+                    </div>
+                    <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
+                      <h5 className="font-bold text-sm text-indigo-200 mb-2">{compareApps.app2}</h5>
+                      <p className="text-sm text-indigo-100">{comparisonResult.riskProfileComparison?.app2}</p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="pt-6 border-t border-white/10">
                   <div className="flex items-start gap-3">
                     <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-1" />
-                    <p className="text-indigo-100 italic text-sm">{comparisonResult.finalVerdict}</p>
+                    <p className="text-indigo-100 italic text-sm">{comparisonResult.verdictExplanation}</p>
                   </div>
                 </div>
               </div>

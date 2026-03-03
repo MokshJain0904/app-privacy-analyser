@@ -448,7 +448,7 @@ export default function Home() {
       </main>
 
       <footer className="max-w-5xl mx-auto px-6 py-12 border-t border-slate-200 text-center text-slate-400 text-sm">
-        <p>© 2024 PrivaGuard. Protecting your digital footprint.</p>
+        <p>© 2026 PrivaGuard. Protecting your digital footprint.</p>
       </footer>
     </div>
   );

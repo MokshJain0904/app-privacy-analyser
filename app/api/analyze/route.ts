@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Google AI API Key is not configured. Please create a .env.local file with GOOGLE_AI_API_KEY=your_key' }, { status: 500 });
   }
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   try {
     let prompt = '';

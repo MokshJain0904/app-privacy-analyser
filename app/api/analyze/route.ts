@@ -1,231 +1,159 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-
 import gplay from 'google-play-scraper';
+import { getExpectedPermissions } from '@/lib/permissions-db';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
-// Risk Scoring Helpers
-function calculateRiskScore(permissions: any[]) {
+// Risk Scoring Helpers (Updated to use 35% threshold logic)
+function calculateRiskScore(permissions: any[], expectedPermissions: string[]) {
   let totalScore = 0;
   permissions.forEach(p => {
-    const level = p.riskLevel || p.level; // Handle both schemas
-    if (level === "Safe") totalScore += 1;
-    else if (level === "Review Needed") totalScore += 5;
-    else if (level === "High Risk") totalScore += 15;
+    const isExpected = expectedPermissions.some(ep =>
+      p.name.toLowerCase().includes(ep.toLowerCase()) ||
+      ep.toLowerCase().includes(p.name.toLowerCase())
+    );
+
+    const level = p.riskLevel;
+    if (level === "High Risk") {
+      totalScore += isExpected ? 10 : 25; // More severe if unexpected
+    } else if (level === "Review Needed") {
+      totalScore += isExpected ? 2 : 10;
+    } else {
+      totalScore += isExpected ? 0 : 2;
+    }
   });
   return totalScore;
 }
 
 function normalizeScore(rawScore: number, totalPermissions: number) {
   if (totalPermissions === 0) return 0;
-  const maxPossible = totalPermissions * 15; // worst case
-  return Math.round((rawScore / maxPossible) * 100);
-}
-
-function getRiskLabel(score: number) {
-  if (score <= 20) return "Very Low";
-  if (score <= 40) return "Low";
-  if (score <= 60) return "Moderate";
-  if (score <= 80) return "High";
-  return "Critical";
-}
-
-function decideWinner(app1Score: number, app2Score: number, app1Name: string, app2Name: string) {
-  if (app1Score < app2Score) return app1Name;
-  if (app2Score < app1Score) return app2Name;
-  return "Tie";
+  const maxPossible = totalPermissions * 25;
+  return Math.min(100, Math.round((rawScore / maxPossible) * 100));
 }
 
 export async function POST(request: Request) {
   const { appName, permissions, type, app1, app2, scrapedData } = await request.json();
 
   if (!process.env.GOOGLE_AI_API_KEY) {
-    console.warn('GOOGLE_AI_API_KEY is missing from environment variables.');
     return NextResponse.json({ error: 'Google AI API Key is not configured.' }, { status: 500 });
   }
 
-  const model15 = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-  const model20 = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }); // Use 2.0-flash as it's better for reasoning if available, or stay consistent
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   try {
     if (type === 'analyze') {
-      const appContext = scrapedData ? `
-Context: This is a "${scrapedData.genre}" app with a rating of ${scrapedData.score?.toFixed(1) || 'N/A'}.
-Description: ${scrapedData.summary || 'No description available.'}
-` : '';
+      const category = scrapedData?.genre || 'Unknown';
+      const expectedPermissions = getExpectedPermissions(category);
+      const isUnidentified = expectedPermissions.length === 0;
 
       const prompt = `
-You are a cybersecurity and mobile privacy risk analyst.
+You are a senior cybersecurity expert. Analyze the app "${appName}" (Category: ${category}).
 
-Analyze the Android app "${appName}" based ONLY on the permissions provided below.
-${appContext}
-
-Permissions:
+Requested Permissions:
 ${permissions.join(', ')}
 
-Instructions:
+Expected Permissions for ${category}:
+${expectedPermissions.join(', ')}
 
-1. Classify EACH permission strictly into one of:
-   - Safe
-   - Review Needed
-   - High Risk
+Guidelines:
+1. Explain why a permission might be dangerous (e.g. Contacts allows uploading lists to servers).
+2. Note exceptions where dangerous permissions are SAFE (e.g. WhatsApp needs CAMERA for video calls, which is normal for its category).
+3. Classify each permission: "Safe", "Review Needed", or "High Risk".
+4. Suggest 3 safer alternatives for this specific task.
+5. Provide a clear "Expert Recommendation".
+6. Return your entire response in valid JSON format only, with no markdown formatting.
 
-2. Do NOT invent new permissions.
-3. If unsure, classify conservatively as "Review Needed".
-4. Do NOT use brand reputation or assumptions.
-5. Only analyze the permissions given.
-
-For each permission return:
-- name
-- riskLevel (Safe / Review Needed / High Risk)
-- justification (clear technical reasoning)
-- potentialMisuse (realistic misuse scenario)
-- severityScore (1-10 based on privacy impact)
-
-Return STRICT JSON in this format:
-
+JSON Schema:
 {
   "permissions": [
-    {
-      "name": "",
-      "riskLevel": "",
-      "justification": "",
-      "potentialMisuse": "",
-      "severityScore": 0
-    }
+    { "name": "Permission Name", "riskLevel": "Safe/Review Needed/High Risk", "justification": "Why it's risky or safe", "potentialMisuse": "N/A or detail" }
   ],
-  "summary": "",
-  "keyConcerns": ["Top 3 most concerning permissions"],
-  "confidence": "High"
+  "summary": "Technical summary",
+  "recommendation": "Final advice",
+  "alternatives": [
+    { "name": "App Name", "reason": "Why it's better" }
+  ]
 }
-
-The summary must:
-- Clearly state overall risk posture
-- Mention most sensitive permissions
-- Be 4-6 sentences
-- Be written like a professional security audit report
-
-Only return valid JSON.
 `;
 
-      const result = await model20.generateContent(prompt);
-      const response = await result.response;
-      let text = response.text().replace(/```json\n?|```/g, '').trim();
-      const analysis = JSON.parse(text);
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      const cleanJson = text.replace(/```json\n?|```/g, '').trim();
+      const analysis = JSON.parse(cleanJson);
 
-      // Perform deterministic scoring
-      const rawScore = calculateRiskScore(analysis.permissions);
+      const rawScore = calculateRiskScore(analysis.permissions, expectedPermissions);
       const normalizedScore = normalizeScore(rawScore, analysis.permissions.length);
 
       return NextResponse.json({
         ...analysis,
         overallRiskScore: normalizedScore,
-        riskLabel: getRiskLabel(normalizedScore),
-        riskDistribution: {
-          safeCount: analysis.permissions.filter((p: any) => p.riskLevel === "Safe").length,
-          reviewCount: analysis.permissions.filter((p: any) => p.riskLevel === "Review Needed").length,
-          highRiskCount: analysis.permissions.filter((p: any) => p.riskLevel === "High Risk").length
-        }
+        riskLabel: normalizedScore > 35 ? "Over-Permissive" : "Safe",
+        isUnidentified
       });
+
     } else if (type === 'compare') {
-      // Step 1: Fetch permissions for both apps if not provided
-      const fetchPermissions = async (name: string) => {
+      const fetchAppData = async (name: string) => {
         const searchResults = await gplay.search({ term: name, num: 1, fullDetail: true });
-        if (!searchResults.length) return { name, permissions: [], context: '' };
+        if (!searchResults.length) return null;
         const app = searchResults[0];
         const perms = await gplay.permissions({ appId: app.appId });
         return {
           name: app.title,
-          permissions: perms.map((p: any) => p.permission),
-          context: `This is a "${app.genre}" app with a rating of ${app.score?.toFixed(1) || 'N/A'}. Description: ${app.summary}`
+          genre: app.genre,
+          permissions: perms.map((p: any) => p.permission)
         };
       };
 
       const [app1Data, app2Data] = await Promise.all([
-        fetchPermissions(app1),
-        fetchPermissions(app2)
+        fetchAppData(app1),
+        fetchAppData(app2)
       ]);
 
-      // Step 2: Run individual AI analyses
-      const getAnalysis = async (data: any) => {
-        const prompt = `Classify these permissions for a professional audit of "${data.name}": ${data.permissions.join(', ')}. Context: ${data.context}. Return JSON: { "permissions": [{ "name": "", "riskLevel": "Safe/Review Needed/High Risk" }] }`;
-        const result = await model15.generateContent(prompt);
-        return JSON.parse(result.response.text().replace(/```json\n?|```/g, '').trim());
-      };
+      if (!app1Data || !app2Data) {
+        return NextResponse.json({ error: 'One or both apps not found' }, { status: 404 });
+      }
 
-      const [app1Analysis, app2Analysis] = await Promise.all([
-        getAnalysis(app1Data),
-        getAnalysis(app2Data)
-      ]);
+      const prompt = `
+Compare Privacy: "${app1Data.name}" vs "${app2Data.name}".
 
-      // Step 3: Run comparison prompt
-      const comparePrompt = `
-You are a cybersecurity expert.
+App 1 Perms: ${app1Data.permissions.join(', ')}
+App 2 Perms: ${app2Data.permissions.join(', ')}
 
-Compare two Android applications strictly based on the classified permission data below.
+Return your entire response in valid JSON format only, with no markdown formatting.
 
-App 1: "${app1Data.name}"
-Permissions Analysis:
-${JSON.stringify(app1Analysis)}
-
-App 2: "${app2Data.name}"
-Permissions Analysis:
-${JSON.stringify(app2Analysis)}
-
-Instructions:
-
-1. Do NOT reclassify permissions.
-2. Do NOT change risk levels.
-3. Do NOT calculate scores.
-4. Do NOT decide winner.
-5. Only explain differences based on given analysis.
-
-Return STRICT JSON in this format:
-
+JSON Schema:
 {
-  "comparisonSummary": "",
-  "riskProfileComparison": {
-    "app1": "",
-    "app2": ""
-  },
-  "topConcerns": {
-    "app1": ["list"],
-    "app2": ["list"]
-  },
-  "verdictExplanation": "",
-  "confidence": "High"
+  "comparisonSummary": "Brief overview of which app is safer",
+  "verdictExplanation": "Detailed explanation of the winner",
+  "winner": "Exact name of winning app",
+  "app1Score": 0-100,
+  "app2Score": 0-100,
+  "similarApps": ["app name 1", "app name 2"],
+  "table": [
+    { "id": "location", "app1": true, "app2": false },
+    { "id": "camera", "app1": true, "app2": false },
+    { "id": "microphone", "app1": true, "app2": false },
+    { "id": "contacts", "app1": true, "app2": false },
+    { "id": "storage", "app1": true, "app2": false },
+    { "id": "phone", "app1": true, "app2": false },
+    { "id": "sms", "app1": true, "app2": false },
+    { "id": "calendar", "app1": true, "app2": false },
+    { "id": "notifications", "app1": true, "app2": false },
+    { "id": "bluetooth", "app1": true, "app2": false }
+  ]
 }
-
-The comparisonSummary must:
-- Compare risk posture clearly
-- Highlight high-risk differences
-- Be analytical and objective
-
-Only return valid JSON.
 `;
 
-      const compareResult = await model20.generateContent(comparePrompt);
-      const comparison = JSON.parse(compareResult.response.text().replace(/```json\n?|```/g, '').trim());
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      const cleanJson = text.replace(/```json\n?|```/g, '').trim();
+      const comparison = JSON.parse(cleanJson);
 
-      // Step 4: Deterministic Scores & Winner
-      const app1ScoreRaw = calculateRiskScore(app1Analysis.permissions);
-      const app2ScoreRaw = calculateRiskScore(app2Analysis.permissions);
-
-      const app1Score = normalizeScore(app1ScoreRaw, app1Analysis.permissions.length);
-      const app2Score = normalizeScore(app2ScoreRaw, app2Analysis.permissions.length);
-
-      return NextResponse.json({
-        ...comparison,
-        app1Score,
-        app2Score,
-        winner: decideWinner(app1Score, app2Score, app1Data.name, app2Data.name),
-        app1Label: getRiskLabel(app1Score),
-        app2Label: getRiskLabel(app2Score)
-      });
+      return NextResponse.json(comparison);
     }
   } catch (error: any) {
-    console.error('AI Analysis error:', error);
-    return NextResponse.json({ error: 'Failed to analyze privacy. ' + error.message }, { status: 500 });
+    console.error('API Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

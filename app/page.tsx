@@ -397,7 +397,7 @@ export default function Home() {
                       </div>
                       <div>
                         <p className="font-black text-sm">Safe</p>
-                        <p className="text-xs text-slate-400">Score &lt; 35%</p>
+                        <p className="text-xs text-slate-400">Score &lt; 25%</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 group">
@@ -406,7 +406,16 @@ export default function Home() {
                       </div>
                       <div>
                         <p className="font-black text-sm">Over-Permissive</p>
-                        <p className="text-xs text-slate-400">Score &gt; 35%</p>
+                        <p className="text-xs text-slate-400">25% - 60%</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 group">
+                      <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-100 group-hover:rotate-12 transition-transform">
+                        <ShieldAlert className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="font-black text-sm">Risky</p>
+                        <p className="text-xs text-slate-400">Score &gt; 60%</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 group">
@@ -427,7 +436,7 @@ export default function Home() {
                   </div>
                   <h4 className="font-black text-indigo-400 uppercase text-xs tracking-widest">Privacy Tip</h4>
                   <p className="text-sm text-slate-300 leading-relaxed font-medium capitalize">
-                    Always check why a calculator needs access to your contacts. If it's over 35%, it's likely mining your data.
+                    Always check why a calculator needs access to your contacts. If it's over 25%, it's starting to be over-permissive. Above 60% is a critical risk.
                   </p>
                 </div>
               </div>
@@ -439,8 +448,9 @@ export default function Home() {
                 <div className="bg-white rounded-[3rem] shadow-2xl shadow-slate-200 border border-slate-200 overflow-hidden">
                   <div className={cn(
                     "px-10 py-12 text-white flex flex-col md:flex-row items-center justify-between gap-8",
-                    analysisResult.overallRiskScore > 35 ? "bg-red-600" :
-                      analysisResult.isUnidentified ? "bg-slate-600" : "bg-green-600"
+                    analysisResult.overallRiskScore > 60 ? "bg-red-600" :
+                      analysisResult.overallRiskScore > 25 ? "bg-orange-500" :
+                        analysisResult.isUnidentified ? "bg-slate-600" : "bg-green-600"
                   )}>
                     <div className="space-y-2 text-center md:text-left">
                       <p className="text-sm font-black uppercase tracking-widest text-white/70">Audit Result</p>

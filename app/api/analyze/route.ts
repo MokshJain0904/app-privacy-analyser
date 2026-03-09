@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import gplay from 'google-play-scraper';
-import { getExpectedPermissions } from '@/lib/permissions-db';
+import { getExpectedPermissions, SENSITIVE_PERMISSIONS } from '@/lib/permissions-db';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
@@ -9,14 +9,20 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 function calculateRiskScore(permissions: any[], expectedPermissions: string[]) {
   let totalScore = 0;
   permissions.forEach(p => {
+    // Check our hardcoded mapping first for consistency
+    const basePermission = Object.keys(SENSITIVE_PERMISSIONS).find(sp =>
+      p.name.toUpperCase().includes(sp) || sp.includes(p.name.toUpperCase())
+    );
+
+    const level = basePermission ? SENSITIVE_PERMISSIONS[basePermission] : p.riskLevel;
+
     const isExpected = expectedPermissions.some(ep =>
       p.name.toLowerCase().includes(ep.toLowerCase()) ||
       ep.toLowerCase().includes(p.name.toLowerCase())
     );
 
-    const level = p.riskLevel;
     if (level === "High Risk") {
-      totalScore += isExpected ? 10 : 25; // More severe if unexpected
+      totalScore += isExpected ? 5 : 25;
     } else if (level === "Review Needed") {
       totalScore += isExpected ? 2 : 10;
     } else {
@@ -39,7 +45,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Google AI API Key is not configured.' }, { status: 500 });
   }
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: {
+      temperature: 0,
+      topP: 0.1,
+      topK: 1,
+    }
+  });
 
   try {
     if (type === 'analyze') {
@@ -85,10 +98,17 @@ JSON Schema:
       const rawScore = calculateRiskScore(analysis.permissions, expectedPermissions);
       const normalizedScore = normalizeScore(rawScore, analysis.permissions.length);
 
+      let riskLabel = "Safe";
+      if (normalizedScore > 60) {
+        riskLabel = "Risky";
+      } else if (normalizedScore > 25) {
+        riskLabel = "Over-Permissive";
+      }
+
       return NextResponse.json({
         ...analysis,
         overallRiskScore: normalizedScore,
-        riskLabel: normalizedScore > 35 ? "Over-Permissive" : "Safe",
+        riskLabel,
         isUnidentified
       });
 
@@ -114,8 +134,20 @@ JSON Schema:
         return NextResponse.json({ error: 'One or both apps not found' }, { status: 404 });
       }
 
+      // Programmatic Scoring for Consistency
+      const app1Expected = getExpectedPermissions(app1Data.genre);
+      const app2Expected = getExpectedPermissions(app2Data.genre);
+
+      const app1Raw = calculateRiskScore(app1Data.permissions.map(p => ({ name: p, riskLevel: 'Safe' })), app1Expected);
+      const app2Raw = calculateRiskScore(app2Data.permissions.map(p => ({ name: p, riskLevel: 'Safe' })), app2Expected);
+
+      const app1Score = normalizeScore(app1Raw, app1Data.permissions.length);
+      const app2Score = normalizeScore(app2Raw, app2Data.permissions.length);
+      const winnerName = app1Score <= app2Score ? app1Data.name : app2Data.name;
+
       const prompt = `
-Compare Privacy: "${app1Data.name}" vs "${app2Data.name}".
+Compare Privacy: "${app1Data.name}" (Score: ${app1Score}) vs "${app2Data.name}" (Score: ${app2Score}).
+The winner is ${winnerName} because it has a lower privacy risk score.
 
 App 1 Perms: ${app1Data.permissions.join(', ')}
 App 2 Perms: ${app2Data.permissions.join(', ')}
@@ -125,10 +157,10 @@ Return your entire response in valid JSON format only, with no markdown formatti
 JSON Schema:
 {
   "comparisonSummary": "Brief overview of which app is safer",
-  "verdictExplanation": "Detailed explanation of the winner",
-  "winner": "Exact name of winning app",
-  "app1Score": 0-100,
-  "app2Score": 0-100,
+  "verdictExplanation": "Detailed explanation of why ${winnerName} won based on the perms",
+  "winner": "${winnerName}",
+  "app1Score": ${app1Score},
+  "app2Score": ${app2Score},
   "similarApps": ["app name 1", "app name 2"],
   "table": [
     { "id": "location", "app1": true, "app2": false },
@@ -149,6 +181,11 @@ JSON Schema:
       const text = result.response.text();
       const cleanJson = text.replace(/```json\n?|```/g, '').trim();
       const comparison = JSON.parse(cleanJson);
+
+      // Force programmatic winner and scores to prevent AI hallucination
+      comparison.winner = winnerName;
+      comparison.app1Score = app1Score;
+      comparison.app2Score = app2Score;
 
       return NextResponse.json(comparison);
     }

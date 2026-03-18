@@ -1,42 +1,15 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import gplay from 'google-play-scraper';
-import { getExpectedPermissions, SENSITIVE_PERMISSIONS } from '@/lib/permissions-db';
+import { getExpectedPermissions } from '@/lib/permissions-db';
+import { getDynamicExpectedPermissions } from '@/lib/csb-dynamic';
+import { calculateRiskScore, normalizeScore } from '@/lib/scoring';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
-// Risk Scoring Helpers (Updated to use 35% threshold logic)
-function calculateRiskScore(permissions: any[], expectedPermissions: string[]) {
-  let totalScore = 0;
-  permissions.forEach(p => {
-    // Check our hardcoded mapping first for consistency
-    const basePermission = Object.keys(SENSITIVE_PERMISSIONS).find(sp =>
-      p.name.toUpperCase().includes(sp) || sp.includes(p.name.toUpperCase())
-    );
+// Removed calculateRiskScore and normalizeScore because they are now imported from @/lib/scoring.ts
 
-    const level = basePermission ? SENSITIVE_PERMISSIONS[basePermission] : p.riskLevel;
 
-    const isExpected = expectedPermissions.some(ep =>
-      p.name.toLowerCase().includes(ep.toLowerCase()) ||
-      ep.toLowerCase().includes(p.name.toLowerCase())
-    );
-
-    if (level === "High Risk") {
-      totalScore += isExpected ? 5 : 25;
-    } else if (level === "Review Needed") {
-      totalScore += isExpected ? 2 : 10;
-    } else {
-      totalScore += isExpected ? 0 : 2;
-    }
-  });
-  return totalScore;
-}
-
-function normalizeScore(rawScore: number, totalPermissions: number) {
-  if (totalPermissions === 0) return 0;
-  const maxPossible = totalPermissions * 25;
-  return Math.min(100, Math.round((rawScore / maxPossible) * 100));
-}
 
 export async function POST(request: Request) {
   const { appName, permissions, type, app1, app2, scrapedData } = await request.json();
@@ -57,7 +30,8 @@ export async function POST(request: Request) {
   try {
     if (type === 'analyze') {
       const category = scrapedData?.genre || 'Unknown';
-      const expectedPermissions = getExpectedPermissions(category);
+      const dynamicExpected = getDynamicExpectedPermissions(category);
+      const expectedPermissions = dynamicExpected.length > 0 ? dynamicExpected : getExpectedPermissions(category);
       const isUnidentified = expectedPermissions.length === 0;
 
       const prompt = `
@@ -95,7 +69,7 @@ JSON Schema:
       const cleanJson = text.replace(/```json\n?|```/g, '').trim();
       const analysis = JSON.parse(cleanJson);
 
-      const rawScore = calculateRiskScore(analysis.permissions, expectedPermissions);
+      const rawScore = await calculateRiskScore(analysis.permissions, category);
       const normalizedScore = normalizeScore(rawScore, analysis.permissions.length);
 
       let riskLabel = "Safe";
@@ -135,11 +109,8 @@ JSON Schema:
       }
 
       // Programmatic Scoring for Consistency
-      const app1Expected = getExpectedPermissions(app1Data.genre);
-      const app2Expected = getExpectedPermissions(app2Data.genre);
-
-      const app1Raw = calculateRiskScore(app1Data.permissions.map(p => ({ name: p, riskLevel: 'Safe' })), app1Expected);
-      const app2Raw = calculateRiskScore(app2Data.permissions.map(p => ({ name: p, riskLevel: 'Safe' })), app2Expected);
+      const app1Raw = await calculateRiskScore(app1Data.permissions.map((p: any) => ({ name: p, riskLevel: 'Safe' })), app1Data.genre);
+      const app2Raw = await calculateRiskScore(app2Data.permissions.map((p: any) => ({ name: p, riskLevel: 'Safe' })), app2Data.genre);
 
       const app1Score = normalizeScore(app1Raw, app1Data.permissions.length);
       const app2Score = normalizeScore(app2Raw, app2Data.permissions.length);

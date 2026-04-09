@@ -56,6 +56,25 @@ export const authService = {
         return userStr ? JSON.parse(userStr) : null;
     },
 
+    // Simulate reset password
+    async resetPassword(email: string, newPassword?: string): Promise<{ error: string | null }> {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        const users = JSON.parse(localStorage.getItem('privaguard_users') || '[]');
+        const userIndex = users.findIndex((u: any) => u.email === email);
+        
+        if (userIndex === -1) {
+            return { error: 'No account found with this email address.' };
+        }
+        
+        if (newPassword) {
+            users[userIndex].password = newPassword;
+            localStorage.setItem('privaguard_users', JSON.stringify(users));
+        }
+        
+        return { error: null };
+    },
+
     // Logout
     signOut() {
         document.cookie = `${AUTH_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;`;

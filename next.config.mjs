@@ -17,6 +17,7 @@ const nextConfig = {
 		ignoreDuringBuilds: true,
 	},
 	allowedDevOrigins: ["*.theopenbuilder.com"],
+	devIndicators: false,
 };
 
 export default nextConfig;

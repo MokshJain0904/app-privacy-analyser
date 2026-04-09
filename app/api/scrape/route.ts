@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const searchResults = await gplay.search({
       term: appName,
       num: 1,
+      country: 'in',
       fullDetail: true
     });
 

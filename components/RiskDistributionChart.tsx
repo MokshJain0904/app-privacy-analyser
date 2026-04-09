@@ -5,7 +5,7 @@ export default function RiskDistributionChart({ data }: { data: { name: string, 
   const hasData = data && data.some(d => d.value > 0);
 
   if (!hasData) {
-    return <div className="h-80 flex items-center justify-center text-gray-500">No data available. Please run the batch scraper pipeline.</div>;
+    return <div className="h-80 flex items-center justify-center text-gray-500">No data available. Go to the home page and scan an app to populate this chart!</div>;
   }
 
   return (

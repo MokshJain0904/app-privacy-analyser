@@ -47,6 +47,17 @@ const PERMISSIONS = [
   { id: 'bluetooth', label: 'Nearby Devices/Bluetooth', icon: Bluetooth },
 ];
 
+const PRIVACY_TIPS = [
+  "Always check why a simple utility app requests access to your contacts or location.",
+  "If a permission seems unnecessary for an app's core function, it's safer to deny it.",
+  "App risk scores above 60% indicate critical over-permissiveness. Proceed with extreme caution.",
+  "Using 'Allow only while using the app' is a great way to restrict background tracking.",
+  "Regularly audit installed apps and revoke permissions you haven't used in months.",
+  "Flashlight apps shouldn't need your precise GPS location. Question every unexpected request.",
+  "Be wary of apps asking for accessibility services unless they genuinely assist with disabilities.",
+  "A privacy score between 25% and 60% means the app is slightly over-permissive and requires your attention."
+];
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'check' | 'compare'>('check');
   const [appName, setAppName] = useState('');
@@ -59,11 +70,14 @@ export default function Home() {
   const [comparisonResult, setComparisonResult] = useState<any>(null);
   const [showIntro, setShowIntro] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [privacyTip, setPrivacyTip] = useState(PRIVACY_TIPS[0]);
+  const [showSafePerms, setShowSafePerms] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const user = authService.getUser();
     setUser(user);
+    setPrivacyTip(PRIVACY_TIPS[Math.floor(Math.random() * PRIVACY_TIPS.length)]);
   }, []);
 
   const handleLogout = () => {
@@ -103,6 +117,7 @@ export default function Home() {
   const handleAnalyze = async () => {
     if (!appName || selectedPermissions.length === 0) return;
     setIsAnalyzing(true);
+    setShowSafePerms(false);
     try {
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -116,7 +131,7 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Server error');
-      setAnalysisResult(data);
+      setAnalysisResult({ ...data, appName, genre: scrapedData?.genre });
     } catch (error: any) {
       console.error(error);
       alert('Analysis Error: ' + error.message);
@@ -144,6 +159,60 @@ export default function Home() {
     } catch (error: any) {
       console.error(error);
       alert('Comparison Error: ' + error.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleViewAudit = async (targetAppName: string) => {
+    setActiveTab('check');
+    setAppName(targetAppName);
+    setIsLoading(true);
+    let newScrapedData = null;
+    let newSelectedPerms: string[] = [];
+    try {
+      const response = await fetch(`/api/scrape?appName=${encodeURIComponent(targetAppName)}`);
+      const data = await response.json();
+      if (data.error) {
+        alert(data.error);
+        setIsLoading(false);
+        return;
+      } else {
+        setScrapedData(data);
+        newScrapedData = data;
+        newSelectedPerms = PERMISSIONS.filter(p =>
+          data.permissions.some((sp: string) => sp.toLowerCase().includes(p.id))
+        ).map(p => p.id);
+        setSelectedPermissions(newSelectedPerms);
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Failed to fetch app data');
+      setIsLoading(false);
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setShowSafePerms(false);
+    try {
+      const analyzeResponse = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'analyze',
+          appName: targetAppName,
+          permissions: newSelectedPerms.map(id => PERMISSIONS.find(p => p.id === id)?.label),
+          scrapedData: newScrapedData
+        })
+      });
+      const analyzeData = await analyzeResponse.json();
+      if (!analyzeResponse.ok) throw new Error(analyzeData.error || 'Server error');
+      setAnalysisResult({ ...analyzeData, appName: targetAppName, genre: newScrapedData?.genre });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error: any) {
+      console.error(error);
+      alert('Analysis Error: ' + error.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -235,6 +304,12 @@ export default function Home() {
                 )}
               >
                 Comparison
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="px-6 py-2 rounded-lg text-sm font-bold transition-all text-slate-600 hover:text-slate-900"
+              >
+                Global Stats
               </button>
             </nav>
             {user && (
@@ -436,7 +511,7 @@ export default function Home() {
                   </div>
                   <h4 className="font-black text-indigo-400 uppercase text-xs tracking-widest">Privacy Tip</h4>
                   <p className="text-sm text-slate-300 leading-relaxed font-medium capitalize">
-                    Always check why a calculator needs access to your contacts. If it's over 25%, it's starting to be over-permissive. Above 60% is a critical risk.
+                    {privacyTip}
                   </p>
                 </div>
               </div>
@@ -455,7 +530,7 @@ export default function Home() {
                     <div className="space-y-2 text-center md:text-left">
                       <p className="text-sm font-black uppercase tracking-widest text-white/70">Audit Result</p>
                       <h3 className="text-5xl font-black">{analysisResult.isUnidentified ? 'Unidentified Application' : analysisResult.riskLabel + ' Risk'}</h3>
-                      <p className="text-white/80 font-medium">{appName} has been classified based on its category: {scrapedData?.genre}</p>
+                      <p className="text-white/80 font-medium">{analysisResult.appName || appName} has been classified based on its category: {analysisResult.genre || scrapedData?.genre}</p>
                     </div>
                     <div className="flex flex-col items-center bg-white/10 backdrop-blur-xl p-8 rounded-[2rem] border border-white/20 min-w-[200px]">
                       <span className="text-xs font-black uppercase tracking-widest text-white/70 mb-1">Privacy Score</span>
@@ -468,46 +543,149 @@ export default function Home() {
                   </div>
 
                   <div className="p-10 space-y-12">
-                    <div className="grid md:grid-cols-2 gap-12">
-                      <div className="space-y-6">
-                        <h4 className="text-2xl font-black border-l-4 border-indigo-600 pl-4">AI Risk Summary</h4>
-                        <p className="text-slate-600 leading-relaxed text-lg font-medium">{analysisResult.summary}</p>
-                        {analysisResult.recommendation && (
-                          <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100 flex gap-4">
-                            <ShieldCheck className="w-6 h-6 text-indigo-600 shrink-0" />
-                            <div>
-                              <p className="font-black text-indigo-900 mb-1">Recommendation</p>
-                              <p className="text-sm text-indigo-700 font-medium">{analysisResult.recommendation}</p>
-                            </div>
-                          </div>
-                        )}
+                    <div className="space-y-12">
+                      <div className="max-w-4xl space-y-6">
+                        <h4 className="text-xl font-black border-l-4 border-indigo-600 pl-4">AI Risk Summary</h4>
+                        <p className="text-slate-600 leading-relaxed text-base font-medium">{analysisResult.summary}</p>
                       </div>
-                      <div className="space-y-6">
-                        <h4 className="text-2xl font-black border-l-4 border-red-600 pl-4">Dangerous Permissions</h4>
-                        <div className="space-y-4">
-                          {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'High Risk' || p.riskLevel === 'Review Needed').map((p: any, i: number) => (
-                            <div key={i} className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-2 hover:border-red-200 transition-colors group">
-                              <div className="flex items-center justify-between">
-                                <p className="font-black text-slate-900 text-lg">{p.name}</p>
-                                <span className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", p.riskLevel === 'High Risk' ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600")}>
-                                  {p.riskLevel}
-                                </span>
-                              </div>
-                              <p className="text-sm text-slate-500 font-medium">{p.justification}</p>
-                              <div className="pt-2 flex items-center gap-2 text-red-500 font-black text-xs uppercase tracking-wider">
-                                <AlertTriangle className="w-4 h-4" />
-                                Potential Misuse: {p.potentialMisuse}
-                              </div>
+                      
+                      {/* Risk Distribution Overview */}
+                      <div className="space-y-6 border-t border-slate-100 pt-8">
+                        <h4 className="text-xl font-black border-l-4 border-slate-900 pl-4">Permissions Overview</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {/* High Risk Column */}
+                          <div className="bg-red-50/50 rounded-3xl p-6 border border-red-100">
+                            <div className="flex items-center gap-2 mb-4">
+                              <ShieldAlert className="w-5 h-5 text-red-500" />
+                              <h5 className="font-bold text-red-800">High Risk</h5>
+                              <span className="ml-auto bg-red-100 text-red-700 text-xs font-black px-2 py-1 rounded-full">
+                                {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'High Risk').length || 0}
+                              </span>
                             </div>
-                          ))}
-                          {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'High Risk' || p.riskLevel === 'Review Needed').length === 0 && (
-                            <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                              <CheckCircle2 className="w-12 h-12 text-green-500 mb-4" />
-                              <p className="font-bold uppercase tracking-widest text-xs">No Critical Risks Detected</p>
+                            <ul className="space-y-2">
+                              {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'High Risk').map((p: any, i: number) => (
+                                <li key={i} className="text-sm font-semibold text-red-700 bg-red-100/50 px-3 py-2 rounded-xl uppercase tracking-widest">{p.name}</li>
+                              ))}
+                              {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'High Risk').length === 0 && (
+                                <li className="text-sm font-semibold text-red-700 bg-red-100/50 px-3 py-2 rounded-xl uppercase tracking-widest">NONE</li>
+                              )}
+                            </ul>
+                          </div>
+
+                          {/* Review Needed Column */}
+                          <div className="bg-amber-50/50 rounded-3xl p-6 border border-amber-100">
+                            <div className="flex items-center gap-2 mb-4">
+                              <AlertTriangle className="w-5 h-5 text-amber-500" />
+                              <h5 className="font-bold text-amber-800">Review Needed</h5>
+                              <span className="ml-auto bg-amber-100 text-amber-700 text-xs font-black px-2 py-1 rounded-full">
+                                {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Review Needed').length || 0}
+                              </span>
+                            </div>
+                            <ul className="space-y-2">
+                              {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Review Needed').map((p: any, i: number) => (
+                                <li key={i} className="text-sm font-semibold text-amber-700 bg-amber-100/50 px-3 py-2 rounded-xl uppercase tracking-widest">{p.name}</li>
+                              ))}
+                              {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Review Needed').length === 0 && (
+                                <li className="text-sm font-semibold text-amber-700 bg-amber-100/50 px-3 py-2 rounded-xl uppercase tracking-widest">NONE</li>
+                              )}
+                            </ul>
+                          </div>
+
+                          {/* Safe Column */}
+                          <div className="bg-green-50/50 rounded-3xl p-6 border border-green-100">
+                            <div className="flex items-center gap-2 mb-4">
+                              <CheckCircle2 className="w-5 h-5 text-green-500" />
+                              <h5 className="font-bold text-green-800">Safe</h5>
+                              <span className="ml-auto bg-green-100 text-green-700 text-xs font-black px-2 py-1 rounded-full">
+                                {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Safe').length || 0}
+                              </span>
+                            </div>
+                            <ul className="space-y-2">
+                              {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Safe').map((p: any, i: number) => (
+                                <li key={i} className="text-sm font-semibold text-green-700 bg-green-100/50 px-3 py-2 rounded-xl uppercase tracking-widest">{p.name}</li>
+                              ))}
+                              {analysisResult.permissions?.filter((p: any) => p.riskLevel === 'Safe').length === 0 && (
+                                <li className="text-sm font-semibold text-green-700 bg-green-100/50 px-3 py-2 rounded-xl uppercase tracking-widest">NONE</li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-6 border-t border-slate-100 pt-8">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xl font-black border-l-4 border-slate-900 pl-4">Permission Audit</h4>
+                          {analysisResult.permissions?.some((p: any) => p.riskLevel === 'Safe') && (
+                            <button 
+                              onClick={() => setShowSafePerms(!showSafePerms)}
+                              className="text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-xl transition-all"
+                            >
+                              {showSafePerms ? 'Hide Safe' : `Show All (${analysisResult.permissions.filter((p: any) => p.riskLevel === 'Safe').length} Safe)`}
+                            </button>
+                          )}
+                        </div>
+                        <div className="space-y-6">
+                          {analysisResult.permissions?.filter((p: any) => showSafePerms || p.riskLevel !== 'Safe').length === 0 ? (
+                             <div className="bg-green-50 p-6 rounded-3xl border border-green-100 text-center">
+                               <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                               <p className="font-bold text-green-800">All requested permissions are safe.</p>
+                             </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                             {analysisResult.permissions?.filter((p: any) => showSafePerms || p.riskLevel !== 'Safe').map((p: any, i: number) => {
+                                const isHighRisk = p.riskLevel === 'High Risk';
+                                const isReviewNeeded = p.riskLevel === 'Review Needed';
+                                const isSafe = p.riskLevel === 'Safe';
+                                return (
+                                  <div key={i} className={cn(
+                                    "bg-white p-6 rounded-3xl border-2 transition-all flex flex-col gap-4",
+                                    isHighRisk ? "border-red-100 shadow-sm" :
+                                    isReviewNeeded ? "border-amber-100 shadow-sm" :
+                                    "border-slate-100"
+                                  )}>
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex items-center gap-3">
+                                        {isHighRisk && <ShieldAlert className="w-8 h-8 text-red-500" />}
+                                        {isReviewNeeded && <AlertTriangle className="w-8 h-8 text-amber-500" />}
+                                        {isSafe && <CheckCircle2 className="w-8 h-8 text-green-500" />}
+                                        <h5 className="font-black text-slate-900 text-2xl uppercase tracking-wide">{p.name}</h5>
+                                      </div>
+                                      <div className="pl-11">
+                                        <span className={cn(
+                                          "font-bold text-sm uppercase tracking-widest",
+                                          isHighRisk ? "text-red-600" :
+                                          isReviewNeeded ? "text-amber-600" :
+                                          "text-green-600"
+                                        )}>
+                                          Risk Level: {p.riskLevel}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 mt-2">
+                                      <p className="text-slate-700 text-base font-semibold leading-relaxed">
+                                        {p.justification || "Not actively used."}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
                       </div>
+                      
+                      {analysisResult.recommendation && (
+                        <div className="space-y-6 border-t border-slate-100 pt-8 max-w-4xl">
+                          <h4 className="text-xl font-black border-l-4 border-indigo-600 pl-4">Expert Recommendation</h4>
+                          <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100 flex gap-4">
+                            <ShieldCheck className="w-8 h-8 text-indigo-600 shrink-0" />
+                            <div>
+                              <p className="text-lg text-indigo-900 font-semibold leading-relaxed">{analysisResult.recommendation}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="border-t border-slate-100 pt-10 space-y-8">
@@ -525,7 +703,7 @@ export default function Home() {
                               <h5 className="font-black text-xl">{app.name}</h5>
                               <p className="text-sm text-slate-500 font-medium">{app.reason}</p>
                             </div>
-                            <button className="mt-6 flex items-center justify-between w-full font-black text-xs uppercase tracking-widest text-indigo-600 group-hover:bg-indigo-50 p-3 rounded-xl transition-all">
+                            <button onClick={() => handleViewAudit(app.name)} className="mt-6 flex items-center justify-between w-full font-black text-xs uppercase tracking-widest text-indigo-600 group-hover:bg-indigo-50 p-3 rounded-xl transition-all">
                               View Audit
                               <ArrowRight className="w-4 h-4 translate-x-1" />
                             </button>
@@ -600,22 +778,7 @@ export default function Home() {
                       <h3 className="text-6xl font-black">Privacy Winner: {comparisonResult.winner}</h3>
                       <p className="text-xl text-indigo-200 max-w-3xl font-medium">{comparisonResult.verdictExplanation}</p>
                     </div>
-                    <div className="grid md:grid-cols-2 gap-6 pt-6">
-                      <div className="bg-white/10 p-8 rounded-3xl border border-white/10 flex flex-col gap-2">
-                        <p className="text-xs font-black text-indigo-300 uppercase tracking-widest">{compareApps.app1}</p>
-                        <p className="text-4xl font-black">{comparisonResult.app1Score}% <span className="text-sm text-indigo-400">Risk</span></p>
-                        <div className="w-full h-2 bg-white/10 rounded-full mt-2 overflow-hidden">
-                          <div className="h-full bg-indigo-400" style={{ width: `${comparisonResult.app1Score}%` }} />
-                        </div>
-                      </div>
-                      <div className="bg-white/10 p-8 rounded-3xl border border-white/10 flex flex-col gap-2">
-                        <p className="text-xs font-black text-indigo-300 uppercase tracking-widest">{compareApps.app2}</p>
-                        <p className="text-4xl font-black">{comparisonResult.app2Score}% <span className="text-sm text-indigo-400">Risk</span></p>
-                        <div className="w-full h-2 bg-white/10 rounded-full mt-2 overflow-hidden">
-                          <div className="h-full bg-indigo-400" style={{ width: `${comparisonResult.app2Score}%` }} />
-                        </div>
-                      </div>
-                    </div>
+
                   </div>
                 </div>
 
@@ -679,9 +842,9 @@ export default function Home() {
                     <h4 className="text-xl font-black uppercase tracking-tight text-indigo-400">Similar Recommended Apps</h4>
                     <div className="space-y-3">
                       {comparisonResult.similarApps?.map((app: string, i: number) => (
-                        <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group">
+                        <div key={i} onClick={() => handleViewAudit(app)} className="cursor-pointer flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group">
                           <span className="font-bold text-slate-200">{app}</span>
-                          <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors" />
+                          <span className="text-xs uppercase tracking-widest font-bold text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">View Audit</span>
                         </div>
                       ))}
                     </div>
@@ -699,10 +862,6 @@ export default function Home() {
           <span className="font-black tracking-tighter text-slate-900">PrivaGuard AI</span>
         </div>
         <p className="text-slate-400 text-sm font-medium">© 2026 PrivaGuard. Protecting your digital footprint with intelligent audits.</p>
-        <div className="flex gap-8 text-xs font-black uppercase tracking-widest text-slate-400">
-          <a href="#" className="hover:text-indigo-600">Privacy Policy</a>
-          <a href="#" className="hover:text-indigo-600">Security Terms</a>
-        </div>
       </footer>
     </div>
   );

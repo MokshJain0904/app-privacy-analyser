@@ -19,10 +19,12 @@ const CATEGORY_CONTEXTS: Record<string, string> = {
   "Social": "Social networking, messaging, sharing photos, videos, and connecting with friends. Requires camera, microphone, storage, and location.",
   "Communication": "Calling, texting, messaging, video calls, email. Requires microphone, camera, contacts, and phone state.",
   "Maps & Navigation": "GPS, driving directions, transit, map tools. Strictly requires high-accuracy location and internet.",
+  "Travel": "Travel guides, booking hotels, local tourism, finding places. Requires location for mapping and internet.",
   "Photography": "Taking photos, recording videos, editing images. Requires camera and external storage access.",
   "Finance": "Banking, mobile payments, trading, investing. Requires secure internet, biometric authentication, and camera for checks.",
   "Tools": "Utility apps, calculators, flashlights, device management. Usually minimal permissions required, maybe wake lock or vibrate.",
   "Lifestyle": "Home, fashion, religion, dating, smart home. May require location for matching, or camera for styling.",
+  "Health": "Fitness tracking, workout logs, medical records. Requires location for running analysis and bluetooth for smartwatches.",
   "Education": "Learning, school apps, courses, flashcards. Minimal permissions, mostly internet and basic storage.",
   "Entertainment": "Streaming movies, music, games, fun apps. Requires internet, wake lock, and audio.",
   "Shopping": "E-commerce, buying goods, digital coupons. Requires internet, camera for barcodes, and location for shipping."
@@ -68,28 +70,28 @@ export async function semanticPermissionMatch(
   category: string,
   threshold: number = 0.35
 ): Promise<{ score: number, isExpected: boolean }> {
-  
+
   const extractor = await getExtractor();
-  
+
   const readablePermission = formatPermissionText(permission);
-  
+
   // Clean category key
-  const normalizedCategory = Object.keys(CATEGORY_CONTEXTS).find(k => 
+  const normalizedCategory = Object.keys(CATEGORY_CONTEXTS).find(k =>
     category.toLowerCase().includes(k.toLowerCase())
   ) || "Tools"; // fallback to tools context
-  
+
   const contextDescription = CATEGORY_CONTEXTS[normalizedCategory];
-  
+
   // Get embeddings
   // We specify { pooling: 'mean', normalize: true } for sentence embeddings
   const permOutput = await extractor(readablePermission, { pooling: 'mean', normalize: true });
   const contextOutput = await extractor(contextDescription, { pooling: 'mean', normalize: true });
-  
+
   const permVector = Array.from(permOutput.data) as number[];
   const contextVector = Array.from(contextOutput.data) as number[];
-  
+
   const score = cosineSimilarity(permVector, contextVector);
-  
+
   return {
     score,
     isExpected: score >= threshold

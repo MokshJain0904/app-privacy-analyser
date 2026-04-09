@@ -20,6 +20,11 @@ export const PERMISSIONS_DB: Record<string, CategoryPermissions> = {
         expectedPermissions: ["INTERNET", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_NETWORK_STATE", "WRITE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE"],
         description: "Navigation apps strictly require high-accuracy location data."
     },
+    "Travel": {
+        category: "Travel",
+        expectedPermissions: ["INTERNET", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_NETWORK_STATE", "CAMERA", "READ_EXTERNAL_STORAGE"],
+        description: "Travel and local guide apps require location data and internet access."
+    },
     "Photography": {
         category: "Photography",
         expectedPermissions: ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "INTERNET", "ACCESS_NETWORK_STATE"],
@@ -39,6 +44,11 @@ export const PERMISSIONS_DB: Record<string, CategoryPermissions> = {
         category: "Lifestyle",
         expectedPermissions: ["INTERNET", "ACCESS_NETWORK_STATE", "CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "ACCESS_COARSE_LOCATION", "READ_CONTACTS"],
         description: "Lifestyle apps like Pinterest or religious apps often need media access and social connectivity."
+    },
+    "Health": {
+        category: "Health",
+        expectedPermissions: ["INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_FINE_LOCATION", "CAMERA", "USE_BIOMETRIC", "BLUETOOTH"],
+        description: "Health and fitness apps require location for run tracking, and bluetooth for wearables."
     },
     "Education": {
         category: "Education",

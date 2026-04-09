@@ -1,21 +1,31 @@
-import fs from 'fs';
-import path from 'path';
+import { unstable_noStore as noStore } from 'next/cache';
 import RiskDistributionChart from '@/components/RiskDistributionChart';
 import CategoryComparisonChart from '@/components/CategoryComparisonChart';
+import { getAuditCache } from '@/lib/cache-db';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function getDashboardData() {
-  const datasetPath = path.join(process.cwd(), 'data', 'dataset.json');
-  let dataset: any[] = [];
+  noStore();
   
-  if (fs.existsSync(datasetPath)) {
-    try {
-      dataset = JSON.parse(fs.readFileSync(datasetPath, 'utf8'));
-    } catch {
-      dataset = [];
+  const cacheDict = getAuditCache();
+
+  // Deduplicate: Keep only the scenario with the highest absolute Risk Score for each unique app
+  const uniqueAppsMap = new Map<string, any>();
+  Object.values(cacheDict).forEach((app: any) => {
+    const appName = app.appName?.toLowerCase();
+    if (!appName) return;
+    
+    const existing = uniqueAppsMap.get(appName);
+    const score = app.overallRiskScore || 0;
+    
+    if (!existing || score > (existing.overallRiskScore || 0)) {
+      uniqueAppsMap.set(appName, app);
     }
-  }
+  });
+
+  const dataset = Array.from(uniqueAppsMap.values());
 
   let safeCount = 0;
   let permissiveCount = 0;
@@ -23,17 +33,20 @@ async function getDashboardData() {
   const categoryScores: Record<string, { totalScore: number, count: number }> = {};
   
   dataset.forEach((app: any) => {
+    const score = app.overallRiskScore || 0;
+    const cat = app.category || 'Unknown';
+
     // Collect counts
-    if (app.computedScore > 60) riskyCount++;
-    else if (app.computedScore > 25) permissiveCount++;
+    if (score > 60) riskyCount++;
+    else if (score > 25) permissiveCount++;
     else safeCount++;
     
     // Collect category totals
-    if (!categoryScores[app.category]) {
-      categoryScores[app.category] = { totalScore: 0, count: 0 };
+    if (!categoryScores[cat]) {
+      categoryScores[cat] = { totalScore: 0, count: 0 };
     }
-    categoryScores[app.category].totalScore += app.computedScore;
-    categoryScores[app.category].count += 1;
+    categoryScores[cat].totalScore += score;
+    categoryScores[cat].count += 1;
   });
 
   const categoryAverages = Object.keys(categoryScores).map(cat => ({
@@ -47,7 +60,13 @@ async function getDashboardData() {
     { name: 'Risky (61-100)', value: riskyCount, fill: '#ef4444' } 
   ];
 
-  return { riskDistribution, categoryAverages, totalApps: dataset.length };
+  // Get Top 5 Most Dangerous
+  const topDangerous = [...dataset]
+    .filter(app => app.overallRiskScore !== undefined)
+    .sort((a, b) => b.overallRiskScore - a.overallRiskScore)
+    .slice(0, 5);
+
+  return { riskDistribution, categoryAverages, totalApps: dataset.length, topDangerous };
 }
 
 export default async function DashboardPage() {
@@ -58,17 +77,17 @@ export default async function DashboardPage() {
       <div className="max-w-7xl mx-auto space-y-8">
         
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Privacy Analysis Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Global Statistics Dashboard</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Overview of application privacy risks analyzed by the system pipeline. 
-            Currently showing stats for <span className="font-semibold text-gray-900">{data.totalApps}</span> apps.
+            Live overview of application privacy risks analyzed by users globally. 
+            Currently showing stats for <span className="font-semibold text-gray-900">{data.totalApps}</span> unique applications.
           </p>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Chart 1 */}
           <div className="p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-            <h2 className="text-lg font-semibold text-gray-800 mb-6">Aggregate Risk Distribution</h2>
+            <h2 className="text-lg font-semibold text-gray-800 mb-6">Global Risk Distribution</h2>
             <RiskDistributionChart data={data.riskDistribution} />
           </div>
           
@@ -77,6 +96,44 @@ export default async function DashboardPage() {
             <h2 className="text-lg font-semibold text-gray-800 mb-6">Average Risk by Category</h2>
             <CategoryComparisonChart data={data.categoryAverages} />
           </div>
+        </div>
+
+        {/* Top 5 Most Dangerous Leaderboard */}
+        <div className="p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-gray-900">🚨 Top 5 Most Dangerous Apps</h2>
+            <p className="text-sm text-gray-500">The most invasive applications audited by the community so far.</p>
+          </div>
+          
+          {data.topDangerous.length > 0 ? (
+            <ul className="divide-y divide-gray-100">
+              {data.topDangerous.map((app: any, idx: number) => (
+                <li key={idx} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 -mx-6 px-6 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-600 font-bold text-sm">
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{app.appName || "Unknown App"}</h3>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {app.category || "Unknown Category"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right flex flex-col">
+                      <span className="font-bold text-red-600">{app.overallRiskScore} / 100</span>
+                      <span className="text-xs text-gray-500 uppercase font-semibold tracking-wider">Risk Score</span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500 italic">No apps have been audited yet. Be the first to scan an app!</p>
+            </div>
+          )}
         </div>
 
       </div>

@@ -90,7 +90,10 @@ export async function semanticPermissionMatch(
   const permVector = Array.from(permOutput.data) as number[];
   const contextVector = Array.from(contextOutput.data) as number[];
 
-  const score = cosineSimilarity(permVector, contextVector);
+  let score = cosineSimilarity(permVector, contextVector);
+  
+  // Strictly enforce a continuous probability distribution bracket for upstream scalar math
+  score = Math.max(0, Math.min(1, score));
 
   return {
     score,

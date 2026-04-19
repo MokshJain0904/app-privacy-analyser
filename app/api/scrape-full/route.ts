@@ -24,6 +24,15 @@ export async function GET(request: Request) {
 
     const app = searchResults[0];
     
+    // Get full permissions for Pre-emptive audit
+    let permissions = [];
+    try {
+      const permsData = await gplay.permissions({ appId: app.appId });
+      permissions = permsData.map((p: any) => p.permission);
+    } catch (permError) {
+      console.warn(`Could not fetch exact permissions for ${app.appId}`, permError);
+    }
+
     return NextResponse.json({
       appId: app.appId,
       title: app.title,
@@ -31,7 +40,7 @@ export async function GET(request: Request) {
       icon: app.icon,
       score: app.score,
       genre: app.genre,
-      permissions: [] // Skipped fetching permissions to reduce scraping time
+      permissions: permissions
     });
   } catch (error: any) {
     console.error('Scraping error:', error);

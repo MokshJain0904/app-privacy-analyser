@@ -1,16 +1,61 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import gplay from 'google-play-scraper';
-import { getExpectedPermissions, SENSITIVE_PERMISSIONS } from '@/lib/permissions-db';
+import { getExpectedPermissions, SENSITIVE_PERMISSIONS, findBasePermission } from '@/lib/permissions-db';
 import { getDynamicExpectedPermissions } from '@/lib/csb-dynamic';
 import { calculateRiskScore, normalizeScore } from '@/lib/scoring';
 import { getFromAuditCache, saveToAuditCache } from '@/lib/cache-db';
+import { semanticPermissionMatch } from '@/lib/semantic-match';
 
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
-// Removed calculateRiskScore and normalizeScore because they are now imported from @/lib/scoring.ts
+const retryModels = ['gemini-2.5-flash', 'gemini-2.5-mini', 'gemini-1.5-pro'];
 
+async function generateWithRetry(prompt: string) {
+  const maxAttempts = 3;
+  const baseDelay = 1000;
+  let lastError: any = null;
+
+  for (const modelName of retryModels) {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: {
+        temperature: 0,
+        topP: 0.1,
+        topK: 1,
+      }
+    });
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await model.generateContent(prompt);
+      } catch (error: any) {
+        lastError = error;
+        const message = String(error?.message || error?.response?.statusText || '');
+        const status = error?.status || error?.statusCode || error?.response?.status;
+        const isRetryable = status === 503 || /503|Service Unavailable/i.test(message);
+
+        if (!isRetryable) {
+          throw error;
+        }
+
+        if (attempt < maxAttempts) {
+          const jitter = Math.floor(Math.random() * 300);
+          const delay = baseDelay * Math.pow(2, attempt - 1) + jitter;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('Unable to generate AI content after retries.');
+}
+
+// Removed calculateRiskScore and normalizeScore because they are now imported from @/lib/scoring.ts
 
 
 export async function POST(request: Request) {
@@ -19,15 +64,6 @@ export async function POST(request: Request) {
   if (!process.env.GOOGLE_AI_API_KEY) {
     return NextResponse.json({ error: 'Google AI API Key is not configured.' }, { status: 500 });
   }
-
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: {
-      temperature: 0,
-      topP: 0.1,
-      topK: 1,
-    }
-  });
 
   try {
     if (type === 'analyze') {
@@ -87,23 +123,37 @@ JSON Schema:
 }
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await generateWithRetry(prompt);
       const text = result.response.text();
       const cleanJson = text.replace(/```json\n?|```/g, '').trim();
       const analysis = JSON.parse(cleanJson);
 
-      // FOR RESEARCH INTEGRITY: Sync AI's risk levels with the strict, deterministic database that scoring uses
+      // FOR RESEARCH INTEGRITY: Sync AI's risk levels dynamically based on contextual relevance
       if (analysis.permissions && Array.isArray(analysis.permissions)) {
-        analysis.permissions = analysis.permissions.map((ap: any) => {
-          const pName = typeof ap.name === 'string' ? ap.name.toUpperCase() : '';
-          const basePermission = Object.keys(SENSITIVE_PERMISSIONS).find(sp =>
-            pName.includes(sp) || sp.includes(pName)
-          );
-          if (basePermission) {
-            ap.riskLevel = SENSITIVE_PERMISSIONS[basePermission];
+        for (let i = 0; i < analysis.permissions.length; i++) {
+          const ap = analysis.permissions[i];
+          const pName = typeof ap.name === 'string' ? ap.name.trim().toUpperCase() : '';
+          
+          // Try to map to a standardized strict key using robust parser
+          let basePermission = findBasePermission(pName);
+
+          let staticLevel = basePermission ? SENSITIVE_PERMISSIONS[basePermission] : ap.riskLevel;
+
+          // Now fetch dynamic contextual relevance to potentially downgrade UI severity
+          const match = await semanticPermissionMatch(basePermission || pName, category);
+          const relevance = match.score;
+
+          // Downgrade rules based on contextual necessity
+          if (staticLevel === 'High Risk') {
+             if (relevance > 0.85) staticLevel = 'Safe';
+             else if (relevance > 0.45) staticLevel = 'Review Needed';
+          } else if (staticLevel === 'Review Needed') {
+             if (relevance > 0.70) staticLevel = 'Safe';
           }
-          return ap;
-        });
+
+          ap.riskLevel = staticLevel;
+          analysis.permissions[i] = ap;
+        }
       }
 
       // Auto-append omitted "safe" permissions locally to save API tokens
@@ -166,7 +216,7 @@ JSON Schema:
         const classPrompt = `Classify these Android permissions as either "Safe", "Review Needed", or "High Risk": ${unknownPerms.join(', ')}
 Return ONLY a valid JSON object mapping exact permission name to Risk Level. Schema: { "permission_name": "Risk Level" }`;
         try {
-          const classResult = await model.generateContent(classPrompt);
+          const classResult = await generateWithRetry(classPrompt);
           const cleanJson = classResult.response.text().replace(/```json\n?|```/g, '').trim();
           Object.assign(aiClassifications, JSON.parse(cleanJson));
         } catch (e) {
@@ -230,7 +280,7 @@ JSON Schema:
 }
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await generateWithRetry(prompt);
       const text = result.response.text();
       const cleanJson = text.replace(/```json\n?|```/g, '').trim();
       const comparison = JSON.parse(cleanJson);

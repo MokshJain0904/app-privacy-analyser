@@ -108,3 +108,17 @@ export const SENSITIVE_PERMISSIONS: Record<string, string> = {
     "VIBRATE": "Safe",
     "WAKE_LOCK": "Safe",
 };
+
+export function findBasePermission(pName: string): string | undefined {
+  if (!pName) return undefined;
+  const upper = pName.toUpperCase();
+  
+  let base = Object.keys(SENSITIVE_PERMISSIONS).find(sp => sp === upper);
+  if (base) return base;
+  
+  base = Object.keys(SENSITIVE_PERMISSIONS).find(sp => upper.includes(sp) || sp.includes(upper));
+  if (base) return base;
+
+  const words = upper.split(/[^A-Z]/).filter(w => w.length >= 4); // Filter to significant words like STORAGE, CAMERA, LOCATION
+  return Object.keys(SENSITIVE_PERMISSIONS).find(sp => words.some(w => sp.includes(w)));
+}

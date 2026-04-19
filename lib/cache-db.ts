@@ -42,6 +42,50 @@ export function saveToAuditCache(appName: string, permissions: string[], analysi
   }
 }
 
+export function deleteFromAuditCache(appName: string, permissions?: string[]) {
+  try {
+    const cache = getAuditCache();
+    const normalizedApp = appName.toLowerCase().trim();
+    let changed = false;
+
+    if (permissions && permissions.length > 0) {
+      const key = getCacheKey(appName, permissions);
+      if (cache[key]) {
+        delete cache[key];
+        changed = true;
+      }
+    } else {
+      Object.keys(cache).forEach((key) => {
+        const lowerKey = key.toLowerCase();
+        const cachedAppName = cache[key]?.appName?.toLowerCase()?.trim();
+        if (lowerKey.startsWith(`${normalizedApp}_`) || cachedAppName === normalizedApp) {
+          delete cache[key];
+          changed = true;
+        }
+      });
+    }
+
+    if (changed) {
+      fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
+    }
+
+    return changed;
+  } catch (error) {
+    console.error('Error deleting from audit cache:', error);
+    return false;
+  }
+}
+
+export function clearAuditCache() {
+  try {
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({}, null, 2), 'utf-8');
+    return true;
+  } catch (error) {
+    console.error('Error clearing audit cache:', error);
+    return false;
+  }
+}
+
 export function getFromAuditCache(appName: string, permissions: string[]): any | null {
   const cache = getAuditCache();
   const key = getCacheKey(appName, permissions);

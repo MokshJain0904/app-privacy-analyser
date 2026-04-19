@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SENSITIVE_PERMISSIONS } from '@/lib/permissions-db';
-import { semanticPermissionMatch } from '@/lib/semantic-match';
+import { getExpectedPermissions, SENSITIVE_PERMISSIONS, findBasePermission } from '@/lib/permissions-db';
 
 const CONFIG_PATH = path.join(process.cwd(), 'config', 'scoring-weights.json');
 
@@ -41,38 +40,43 @@ export function updateWeights(newWeights: Partial<ScoringWeights>) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2));
 }
 
-// Extracted and modularized from API routes to support the batch scraper and configurable scoring
 export async function calculateRiskScore(permissions: any[], category: string) {
   const weights = getWeights();
+  const expectedPermissions = getExpectedPermissions(category).map((perm) => perm.toUpperCase());
+  const expectedSet = new Set(expectedPermissions);
   let totalScore = 0;
-  
+
   for (const p of permissions) {
-    const permName = typeof p === 'string' ? p : (p.name || p.permission);
-    if (!permName) continue;
+    const permString = typeof p === 'string' ? p : (p.name || p.permission);
+    if (!permString) continue;
 
-    const basePermission = Object.keys(SENSITIVE_PERMISSIONS).find(sp =>
-      permName.toUpperCase().includes(sp) || sp.includes(permName.toUpperCase())
-    );
+    const permTokens = permString.split('.');
+    const permNameExact = permTokens[permTokens.length - 1].toUpperCase();
+    const basePermission = findBasePermission(permNameExact);
+    const riskLevel = basePermission ? SENSITIVE_PERMISSIONS[basePermission] : 'Safe';
+    const permissionKey = basePermission || permNameExact;
+    const isExpected = expectedSet.has(permissionKey);
 
-    const level = basePermission ? SENSITIVE_PERMISSIONS[basePermission] : (p.riskLevel || "Safe");
-
-    const match = await semanticPermissionMatch(permName, category);
-    const isExpected = match.isExpected;
-
-    if (level === "High Risk") {
+    if (riskLevel === 'High Risk') {
       totalScore += isExpected ? weights.highRiskExpected : weights.highRiskUnexpected;
-    } else if (level === "Review Needed") {
+    } else if (riskLevel === 'Review Needed') {
       totalScore += isExpected ? weights.reviewNeededExpected : weights.reviewNeededUnexpected;
     } else {
       totalScore += isExpected ? weights.safeExpected : weights.safeUnexpected;
     }
   }
+
   return totalScore;
 }
 
 export function normalizeScore(rawScore: number, totalPermissions: number) {
-  const weights = getWeights();
-  if (totalPermissions === 0) return 0;
-  const maxPossible = totalPermissions * weights.highRiskUnexpected;
-  return Math.min(100, Math.round((rawScore / maxPossible) * 100));
+  if (rawScore === 0) return 0;
+  
+  // Asymptotic Decay Curve
+  // Eliminates dilution bug where 50 safe permissions mask 1 high risk
+  // k is tuned so ~1 High Risk Unexpected (25 points) shoots score to 60%.
+  const k = 0.036; 
+  const normalized = 100 * (1 - Math.exp(-k * rawScore));
+  
+  return Math.min(100, Math.round(normalized));
 }

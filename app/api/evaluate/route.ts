@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import { getEvalLabels, saveEvalLabel, computeMetrics, EvalLabel } from '@/lib/metrics';
 
-export async function GET() {
+
+// Handler for GET requests - fetch evaluation metrics
+async function getHandler() {
   try {
     const metrics = computeMetrics();
     const labels = getEvalLabels();
@@ -11,7 +14,8 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+// Handler for POST requests - save evaluation labels
+async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
     const { appId, appName, category, systemScore, systemRiskLabel, manualLabel } = body;
@@ -40,3 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// Apply rate limiting
+export const GET = withRateLimit(getHandler as any, RATE_LIMITS.API);
+export const POST = withRateLimit(postHandler, RATE_LIMITS.API);

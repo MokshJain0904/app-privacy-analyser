@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import gplay from 'google-play-scraper';
+import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import { getExpectedPermissions, SENSITIVE_PERMISSIONS, findBasePermission } from '@/lib/permissions-db';
 import { getDynamicExpectedPermissions } from '@/lib/csb-dynamic';
 import { calculateRiskScore, normalizeScore } from '@/lib/scoring';
@@ -58,7 +59,7 @@ async function generateWithRetry(prompt: string) {
 // Removed calculateRiskScore and normalizeScore because they are now imported from @/lib/scoring.ts
 
 
-export async function POST(request: Request) {
+async function handler(request: NextRequest) {
   const { appName, permissions, type, app1, app2, scrapedData } = await request.json();
 
   if (!process.env.GOOGLE_AI_API_KEY) {
@@ -297,3 +298,6 @@ JSON Schema:
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// Apply rate limiting to expensive analyze operation
+export const POST = withRateLimit(handler, RATE_LIMITS.EXPENSIVE);

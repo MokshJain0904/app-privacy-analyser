@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 
 interface TrackerInfo {
   id: string;
@@ -110,7 +111,7 @@ function computeTrackerRisk(trackerCount: number): { score: number; level: strin
   return { score: Math.min(100, 65 + (trackerCount - 6) * 5), level: 'RISKY' };
 }
 
-export async function POST(request: NextRequest) {
+async function handler(request: NextRequest) {
   try {
     const { appName, packageName } = await request.json();
 
@@ -205,3 +206,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch privacy report', details: String(error) }, { status: 500 });
   }
 }
+
+// Apply rate limiting for external API calls
+export const POST = withRateLimit(handler, RATE_LIMITS.EXTERNAL_API);

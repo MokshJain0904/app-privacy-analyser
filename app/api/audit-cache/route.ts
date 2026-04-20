@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import { deleteFromAuditCache, clearAuditCache } from '@/lib/cache-db';
 
-export async function POST(request: Request) {
+
+// Handler for cache management operations
+async function handler(request: NextRequest) {
   const body = await request.json();
   const { action, appName, permissions } = body;
 
@@ -21,3 +24,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ error: 'Unsupported action. Use "delete" or "clear".' }, { status: 400 });
 }
+
+// Apply rate limiting
+export const POST = withRateLimit(handler, RATE_LIMITS.API);

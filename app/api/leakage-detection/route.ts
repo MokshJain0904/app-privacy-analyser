@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import { analyzePermissionUsage, generateLeakageIndicators } from '@/lib/permission-usage-tracking';
 import { USER_FRIENDLY_PERMISSION_EXPLANATIONS } from '@/lib/user-friendly-permissions';
 
@@ -6,7 +7,7 @@ import { USER_FRIENDLY_PERMISSION_EXPLANATIONS } from '@/lib/user-friendly-permi
  * API endpoint for privacy leakage detection
  * Compares declared permissions with typical usage patterns
  */
-export async function POST(request: NextRequest) {
+async function handler(request: NextRequest) {
   try {
     const { permissions, appCategory, appName } = await request.json();
 
@@ -100,3 +101,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// Apply rate limiting for expensive leakage detection
+export const POST = withRateLimit(handler, RATE_LIMITS.EXPENSIVE);

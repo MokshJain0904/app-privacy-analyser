@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import { getCSBData, getDynamicExpectedPermissions } from '@/lib/csb-dynamic';
 
-export async function GET(request: Request) {
+
+// Handler for CSB dynamic data requests
+async function handler(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get('category');
 
@@ -31,3 +34,6 @@ export async function GET(request: Request) {
     summary
   });
 }
+
+// Apply rate limiting
+export const GET = withRateLimit(handler, RATE_LIMITS.API);

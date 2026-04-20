@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import gplay from 'google-play-scraper';
 
-export async function GET(request: Request) {
+
+// Wrap handler with rate limiting for moderate-cost Play Store scraping
+async function handler(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const appName = searchParams.get('appName');
 
@@ -38,3 +41,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to fetch app data' }, { status: 500 });
   }
 }
+
+// Apply rate limiting
+export const GET = withRateLimit(handler, RATE_LIMITS.API);

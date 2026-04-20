@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { ToastProvider } from "@/components/Toast";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -14,8 +15,9 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "PrivaGuard",
-  description: "AI-Powered Android App Privacy Risk Analyzer",
+  title: "PrivaGuard - Android App Privacy Analyzer",
+  description: "AI-Powered Android App Privacy Risk Analyzer. Detect data leakage, track third-party trackers, and analyze app permissions for your security.",
+  keywords: "privacy, android, app security, permission analyzer, data leakage",
   icons: {
     icon: "/icon.png",
   },
@@ -31,7 +33,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <ToastProvider>
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );

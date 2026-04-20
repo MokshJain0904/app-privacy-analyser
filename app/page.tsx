@@ -34,6 +34,8 @@ import {
 import { cn } from '@/lib/utils';
 import { authService, type User } from '@/lib/auth-service';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/Toast';
+import { validateAppName, sanitizeAppName } from '@/lib/input-validation';
 import { PermissionAnalyzer } from '@/components/PermissionAnalyzer';
 import { BeforeInstallationAnalyzer } from '@/components/BeforeInstallationAnalyzer';
 import { PrivacyAnalysisPanel } from '@/components/PrivacyAnalysisPanel';
@@ -71,6 +73,7 @@ const PRIVACY_TIPS = [
 ];
 
 export default function Home() {
+  const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'before-install' | 'check' | 'compare' | 'leakage-detection'>('check');
   const [appName, setAppName] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
@@ -177,14 +180,19 @@ export default function Home() {
 
   const handleScrape = async () => {
     setShowAppSuggestions(false);
-    if (!appName) return;
+    const validation = validateAppName(appName);
+    if (!validation.valid) {
+      addToast(validation.error || 'Invalid app name', 'error');
+      return;
+    }
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/scrape?appName=${encodeURIComponent(appName)}`);
+      const response = await fetch(`/api/scrape?appName=${encodeURIComponent(sanitizeAppName(appName))}`);
       const data = await response.json();
       if (data.error) {
-        alert(data.error);
+        addToast(data.error, 'error');
       } else {
+        addToast(`Fetched: ${data.title || appName}`, 'success');
         setScrapedData(data);
         const mappedPermissions = PERMISSIONS.filter(p =>
           data.permissions.some((sp: string) => sp.toLowerCase().includes(p.id))
@@ -193,7 +201,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error(error);
-      alert('Failed to fetch app data');
+      addToast('Failed to fetch app data', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -201,18 +209,22 @@ export default function Home() {
 
   const handleScrapeFull = async () => {
     setShowAppSuggestions(false);
-    if (!appName) return;
+    const validation = validateAppName(appName);
+    if (!validation.valid) {
+      addToast(validation.error || 'Invalid app name', 'error');
+      return;
+    }
     setIsLoading(true);
     setTrackerData(null);
     setShowBeforeInstallView(false);
     try {
-      const response = await fetch(`/api/scrape-full?appName=${encodeURIComponent(appName)}`);
+      const response = await fetch(`/api/scrape-full?appName=${encodeURIComponent(sanitizeAppName(appName))}`);
       const data = await response.json();
       if (data.error) {
-        alert(data.error);
+        addToast(data.error, 'error');
       } else {
+        addToast(`Fetched: ${data.title || appName}`, 'success');
         setScrapedData(data);
-        // Auto-fetch trackers from Exodus Privacy in parallel
         setIsFetchingTrackers(true);
         fetch('/api/exodus-privacy', {
           method: 'POST',
@@ -226,14 +238,22 @@ export default function Home() {
       }
     } catch (error) {
       console.error(error);
-      alert('Failed to fetch app data from Play Store');
+      addToast('Failed to fetch app data from Play Store', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAnalyze = async () => {
-    if (!appName || selectedPermissions.length === 0) return;
+    const validation = validateAppName(appName);
+    if (!validation.valid) {
+      addToast(validation.error || 'Invalid app name', 'error');
+      return;
+    }
+    if (selectedPermissions.length === 0) {
+      addToast('Please select at least one permission', 'warning');
+      return;
+    }
     setIsAnalyzing(true);
     setShowSafePerms(false);
     try {
@@ -242,17 +262,18 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'analyze',
-          appName,
+          appName: sanitizeAppName(appName),
           permissions: selectedPermissions.map(id => PERMISSIONS.find(p => p.id === id)?.label),
           scrapedData
         })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Server error');
+      addToast('Analysis complete', 'success');
       setAnalysisResult({ ...data, appName, genre: scrapedData?.genre });
     } catch (error: any) {
       console.error(error);
-      alert('Analysis Error: ' + error.message);
+      addToast('Analysis failed: ' + error.message, 'error');
     } finally {
       setIsAnalyzing(false);
     }
@@ -266,7 +287,7 @@ export default function Home() {
 
     try {
       if (!scrapedData || !scrapedData.permissions || scrapedData.permissions.length === 0) {
-        alert('No permissions data fetched for this app. Please fetch app info first.');
+        addToast('No permissions data fetched. Please fetch app info first.', 'warning');
         setIsAnalyzing(false);
         return;
       }
@@ -279,7 +300,7 @@ export default function Home() {
       const friendlyPerms = Array.from(new Set(mappedLabels));
 
       if (friendlyPerms.length === 0) {
-        alert('No sensitive permissions found to analyze for this app. It might be safe or the Play Store data is incomplete.');
+        addToast('No sensitive permissions found. The app might be safe.', 'info');
         setIsAnalyzing(false);
         return;
       }
@@ -1309,7 +1330,7 @@ export default function Home() {
                     const confirm = window.confirm("Are you sure you want to install this app?");
                     if(confirm) window.open(`https://play.google.com/store/apps/details?id=${scrapedData?.appId}`, '_blank');
                   }}
-                  onSuggestAlternatives={() => alert('Checking safer alternatives feature in progress...')}
+                  onSuggestAlternatives={() => addToast('Safer alternatives feature coming soon', 'info')}
                 />
               </div>
             )}
@@ -1618,7 +1639,7 @@ export default function Home() {
                             setLeakageDetectionData(leakageData);
                           } catch (error) {
                             console.error('Leakage detection error:', error);
-                            alert('Failed to analyze app for privacy leakage: ' + String(error));
+                            addToast('Failed to analyze app: ' + String(error), 'error');
                           } finally {
                             setLeakageLoading(false);
                           }

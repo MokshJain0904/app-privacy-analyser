@@ -60,16 +60,8 @@ export function withRateLimit<T extends NextRequest>(
       );
     }
 
-    // Add rate limit headers to successful response
-    const response = await handler(request);
-    
-    // Clone response to add headers
-    const newResponse = new NextResponse(response.body, response);
-    newResponse.headers.set('X-RateLimit-Limit', String(limitConfig.maxRequests));
-    newResponse.headers.set('X-RateLimit-Remaining', String(remaining));
-    newResponse.headers.set('X-RateLimit-Reset', String(Math.ceil(resetTime / 1000)));
-    
-    return newResponse;
+    // Return response directly without modifying headers to avoid breaking the stream
+    return await handler(request);
   };
 }
 

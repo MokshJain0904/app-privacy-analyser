@@ -88,7 +88,7 @@ export const RATE_LIMITS = {
   API: { windowMs: 60 * 1000, maxRequests: 30 },
   
   // Strict limit for expensive operations (analyze, compare)
-  EXPENSIVE: { windowMs: 60 * 1000, maxRequests: 10 },
+  EXPENSIVE: { windowMs: 60 * 1000, maxRequests: 50 },
   
   // Very strict limit for database writes
   AUTH: { windowMs: 15 * 60 * 1000, maxRequests: 5 }, // 5 per 15 minutes

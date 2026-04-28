@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getExpectedPermissions } from '@/lib/permissions-db';
 import { getPermissionRiskScore } from './permission-explanations';
 
 export type PermissionDecision = 'ACCEPT' | 'REJECT' | 'CAUTION';
@@ -12,58 +13,16 @@ export interface PermissionRecommendation {
   riskScore: number;
 }
 
-// Expected permissions by category
-export const CATEGORY_EXPECTED_PERMISSIONS: Record<string, Set<string>> = {
-  'Social Media': new Set([
-    'READ_CONTACTS', 'CAMERA', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE',
-    'WRITE_EXTERNAL_STORAGE', 'INTERNET', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'
-  ]),
-  'Maps & Navigation': new Set([
-    'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'INTERNET', 'CAMERA', 'READ_EXTERNAL_STORAGE'
-  ]),
-  'Messaging': new Set([
-    'READ_CONTACTS', 'READ_SMS', 'RECORD_AUDIO', 'CAMERA', 'INTERNET', 'WRITE_SMS'
-  ]),
-  'Photography': new Set([
-    'CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'INTERNET', 'ACCESS_FINE_LOCATION'
-  ]),
-  'Banking': new Set([
-    'INTERNET', 'CAMERA', 'USE_BIOMETRIC', 'READ_EXTERNAL_STORAGE'
-  ]),
-  'Health & Fitness': new Set([
-    'INTERNET', 'ACCESS_FINE_LOCATION', 'BLUETOOTH', 'CAMERA', 'READ_EXTERNAL_STORAGE'
-  ]),
-  'Video & Streaming': new Set([
-    'INTERNET', 'CAMERA', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'WAKE_LOCK'
-  ]),
-  'News & Magazine': new Set([
-    'INTERNET', 'CAMERA', 'READ_EXTERNAL_STORAGE'
-  ]),
-  'Shopping': new Set([
-    'INTERNET', 'CAMERA', 'ACCESS_COARSE_LOCATION', 'READ_EXTERNAL_STORAGE'
-  ]),
-  'Education': new Set([
-    'INTERNET', 'CAMERA', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE'
-  ]),
-  'Games': new Set([
-    'INTERNET', 'VIBRATE', 'WAKE_LOCK', 'CAMERA'
-  ]),
-  'Tools': new Set([
-    'INTERNET', 'VIBRATE'
-  ]),
-  'Utilities': new Set([
-    'INTERNET', 'VIBRATE', 'WAKE_LOCK'
-  ]),
-};
+/**
+ * Returns expected technical permissions for a category.
+ * Delegates to the unified permissions-db — no separate list maintained here.
+ */
+export function getExpectedPermissionsForCategory(category: string): Set<string> {
+  return new Set(getExpectedPermissions(category));
+}
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
-/**
- * Get expected permissions for an app category
- */
-export function getExpectedPermissionsForCategory(category: string): Set<string> {
-  return CATEGORY_EXPECTED_PERMISSIONS[category] || new Set();
-}
 
 /**
  * Determine if a permission is expected for a category
@@ -137,18 +96,16 @@ export async function analyzePermission(
   let explanation: string;
 
   if (isExpected) {
+    decision = 'ACCEPT';
     if (riskScore <= 30) {
-      decision = 'ACCEPT';
       confidence = 'HIGH';
       explanation = `Expected for ${appCategory} apps. ${aiAnalysis}`;
     } else if (riskScore <= 60) {
-      decision = 'ACCEPT';
       confidence = 'MEDIUM';
       explanation = `Typically needed for ${appCategory} apps, though it's worth reviewing. ${aiAnalysis}`;
     } else {
-      decision = 'CAUTION';
       confidence = 'MEDIUM';
-      explanation = `This is a sensitive permission, even for ${appCategory} apps. Review carefully. ${aiAnalysis}`;
+      explanation = `This is a sensitive permission, but essential for ${appCategory} apps. Review carefully. ${aiAnalysis}`;
     }
   } else {
     // Permission NOT expected
@@ -199,29 +156,37 @@ export async function analyzeAppPermissions(
 /**
  * Calculate overall risk score based on permissions and recommendations
  */
+/**
+ * Calculate overall risk score using asymptotic decay curve.
+ * Eliminates the dilution bug where many safe permissions mask one dangerous one.
+ * k=0.036 means ~50 raw points (one high-risk REJECT) → ~84% score.
+ */
 export function calculateOverallRiskScore(recommendations: PermissionRecommendation[]): number {
   if (recommendations.length === 0) return 0;
 
-  let totalRisk = 0;
-  let rejectedCount = 0;
+  let rawScore = 0;
+  console.log(`\n[Recommendations Algo] Calculating overall risk score...`);
 
   recommendations.forEach(rec => {
-    let weight = 1;
+    let penalty = 0;
     if (rec.decision === 'REJECT') {
-      weight = 1.5; // Penalize rejected permissions more
-      rejectedCount++;
+      penalty = rec.riskScore * 0.5;   // Strong penalty for rejected permissions
     } else if (rec.decision === 'CAUTION') {
-      weight = 1.2;
+      penalty = rec.riskScore * 0.2;   // Moderate penalty
+    } else {
+      penalty = rec.riskScore * 0.02;  // Negligible for accepted / safe perms
     }
-
-    totalRisk += rec.riskScore * weight;
+    console.log(`[Recommendations Algo] Permission: ${rec.permissionName} | Decision: ${rec.decision} | Penalty: +${penalty.toFixed(1)}`);
+    rawScore += penalty;
   });
 
-  // Normalize to 0-100
-  const baseScore = (totalRisk / (recommendations.length * 100)) * 100;
-  const adjustedScore = Math.min(100, baseScore);
+  // Asymptotic curve: prevents dilution — more safe perms don't reduce the score
+  const k = 0.036;
+  const normalized = 100 * (1 - Math.exp(-k * rawScore));
+  const finalScore = Math.min(100, Math.round(normalized));
 
-  return Math.round(adjustedScore);
+  console.log(`[Recommendations Algo] Final Raw Score: ${rawScore.toFixed(1)} -> Normalized: ${finalScore}%\n`);
+  return finalScore;
 }
 
 /**

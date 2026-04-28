@@ -4,14 +4,15 @@ import gplay from 'google-play-scraper';
 import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import { getExpectedPermissions, SENSITIVE_PERMISSIONS, findBasePermission } from '@/lib/permissions-db';
 import { getDynamicExpectedPermissions } from '@/lib/csb-dynamic';
-import { calculateRiskScore, normalizeScore } from '@/lib/scoring';
+import { calculateRiskScore, normalizeScore, recalculateScoreFromRiskLevels, getRiskLabelFromScore, getStrictCategoryBasedRiskLevel } from '@/lib/scoring';
 import { getFromAuditCache, saveToAuditCache } from '@/lib/cache-db';
 import { semanticPermissionMatch } from '@/lib/semantic-match';
+import { ErrorType, AppError, createErrorResponse, logError } from '@/lib/error-handler';
 
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
-const retryModels = ['gemini-2.5-flash', 'gemini-2.5-mini', 'gemini-1.5-pro'];
+const retryModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
 
 async function generateWithRetry(prompt: string) {
   const maxAttempts = 3;
@@ -25,6 +26,7 @@ async function generateWithRetry(prompt: string) {
         temperature: 0,
         topP: 0.1,
         topK: 1,
+        responseMimeType: "application/json",
       }
     });
 
@@ -35,7 +37,13 @@ async function generateWithRetry(prompt: string) {
         lastError = error;
         const message = String(error?.message || error?.response?.statusText || '');
         const status = error?.status || error?.statusCode || error?.response?.status;
+        const isRateLimit = status === 429 || /429|Too Many Requests|Quota exceeded/i.test(message);
         const isRetryable = status === 503 || /503|Service Unavailable/i.test(message);
+
+        // If it's a rate limit (quota exceeded), break immediately to try the NEXT model in the list
+        if (isRateLimit) {
+          break;
+        }
 
         if (!isRetryable) {
           throw error;
@@ -63,7 +71,12 @@ async function handler(request: NextRequest) {
   const { appName, permissions, type, app1, app2, scrapedData } = await request.json();
 
   if (!process.env.GOOGLE_AI_API_KEY) {
-    return NextResponse.json({ error: 'Google AI API Key is not configured.' }, { status: 500 });
+    const error = new AppError(
+      ErrorType.INTERNAL_ERROR,
+      'Google AI API Key is not configured on the server.'
+    );
+    logError(error, { context: 'analyze_handler', appName });
+    return createErrorResponse(error);
   }
 
   try {
@@ -71,6 +84,13 @@ async function handler(request: NextRequest) {
       // Check cache first for faster response and to avoid API limits
       const cachedResult = getFromAuditCache(appName, permissions);
       if (cachedResult) {
+        // FIX: Recalculate overall risk score based on actual permission risk levels
+        // This ensures if someone manually modifies permission risks in cache, the score updates
+        if (cachedResult.permissions && Array.isArray(cachedResult.permissions)) {
+          const recalculatedScore = recalculateScoreFromRiskLevels(cachedResult.permissions);
+          cachedResult.overallRiskScore = recalculatedScore;
+          cachedResult.riskLabel = getRiskLabelFromScore(recalculatedScore);
+        }
         return NextResponse.json(cachedResult);
       }
 
@@ -78,6 +98,7 @@ async function handler(request: NextRequest) {
       const dynamicExpected = getDynamicExpectedPermissions(category);
       const expectedPermissions = dynamicExpected.length > 0 ? dynamicExpected : getExpectedPermissions(category);
       const isUnidentified = expectedPermissions.length === 0;
+      const strictExpectedPermissions = getExpectedPermissions(category); // For robust technical matching
 
       const EXCLUDED_PERMS = ['WAKE_LOCK', 'VIBRATE', 'RECEIVE_BOOT_COMPLETED', 'FOREGROUND_SERVICE', 'INTERNET', 'NETWORK_STATE', 'WIFI_STATE', 'BILLING', 'AD_ID', 'INSTALL_REFERRER'];
       const criticalPermissions = permissions.filter((p: string) => !EXCLUDED_PERMS.some(ep => p.toUpperCase().includes(ep)));
@@ -101,35 +122,78 @@ ${permsToAnalyze.join(', ')}
 Expected Permissions for ${category}:
 ${expectedPermissions.join(', ')}
 
+CRITICAL SCORING RULES (Category-Based):
+- ANY permission NOT in the "Expected Permissions" list MUST be classified as "High Risk"
+- Only permissions IN the expected list can be "Safe" or "Review Needed"
+- Example: If MICROPHONE is not expected for this category, it MUST be "High Risk"
+- Example: If LOCATION is not expected for this category, it MUST be "High Risk"
+
 Guidelines:
-1. Explain exactly how the app uses this permission in its normal functionality. If it appears the app does not actively use it for its core functionality, simply write "Not actively used."
-2. Do NOT write about potential misuse. Focus ONLY on actual application usage or non-usage.
-3. Classify EVERY SINGLE permission provided in the 'Critical Permissions' list: "Safe", "Review Needed", or "High Risk".
-4. Suggest 3 safer alternatives for this specific task.
-5. Provide a clear "Expert Recommendation". Both the "summary" and "recommendation" MUST be exactly 2-3 short, simple lines written for non-technical users.
-6. In your "summary", explicitly state the Calculated Risk Score (${normalizedScore}%) and briefly explain what that score means for this app's privacy.
-7. Return your entire response in valid JSON format only, with no markdown formatting.
-8. CRITICAL: Your JSON "permissions" array MUST contain an entry for EVERY permission listed in "Critical Permissions". Do not omit or skip any.
+1. First check if each permission is in the "Expected Permissions" list
+2. If NOT in list → classify as "High Risk" (no exceptions)
+3. If IN list → explain how the app legitimately uses it
+4. Do NOT downgrade unexpected permissions to "Review Needed"
+5. Focus on actual application usage, not potential misuse
+6. Suggest 3 safer alternatives for High Risk permissions
+7. The "summary" MUST state the Calculated Risk Score (${normalizedScore}%) and what it means
+8. Return ONLY valid JSON with no markdown
 
 JSON Schema:
 {
   "permissions": [
-    { "name": "Permission Name", "riskLevel": "Safe/Review Needed/High Risk", "justification": "How it is used or 'Not actively used.'" }
+    { "name": "Permission Name", "riskLevel": "Safe/Review Needed/High Risk" }
   ],
-  "summary": "Technical summary",
-  "recommendation": "Final advice",
+  "summary": "Brief summary",
   "alternatives": [
     { "name": "App Name", "reason": "Why it's better" }
   ]
 }
+
+CRITICAL: Every permission in "Critical Permissions" MUST be in your JSON "permissions" array.
 `;
 
-      const result = await generateWithRetry(prompt);
-      const text = result.response.text();
-      const cleanJson = text.replace(/```json\n?|```/g, '').trim();
-      const analysis = JSON.parse(cleanJson);
+      let text = '';
+      try {
+        const result = await generateWithRetry(prompt);
+        text = result.response.text();
+      } catch (aiError) {
+        console.warn("AI generation failed or rate limited. Using deterministic fallback to ensure uninterrupted service:", aiError);
+        
+        // Generate a 100% deterministic fallback using STRICT CATEGORY-BASED SCORING
+        // Permission NOT in expected list → HIGH RISK (no exceptions)
+        const fallbackPermissions = permsToAnalyze.map((p: string) => {
+          const riskLevel = getStrictCategoryBasedRiskLevel(p, strictExpectedPermissions, SENSITIVE_PERMISSIONS);
+          
+          return {
+            name: p,
+            riskLevel
+          };
+        });
 
-      // FOR RESEARCH INTEGRITY: Sync AI's risk levels dynamically based on contextual relevance
+        const fallbackData = {
+          permissions: fallbackPermissions,
+          summary: `This app has a Calculated Risk Score of ${normalizedScore}%. We performed a deterministic static analysis because the AI engine was temporarily rate-limited.`,
+          alternatives: [
+            { name: "Search F-Droid", reason: "Open-source privacy-respecting alternatives are usually available on F-Droid." },
+            { name: "Web Version", reason: "Using the website version of the app in a private browser often requires fewer permissions." }
+          ]
+        };
+        text = JSON.stringify(fallbackData);
+      }
+      
+      let cleanJson = text.replace(/```json\n?|```/g, '').trim();
+      
+      let analysis;
+      try {
+        analysis = JSON.parse(cleanJson);
+      } catch (parseError) {
+        console.error("Failed to parse AI JSON response:", cleanJson);
+        throw new Error("AI generated an incomplete analysis response. Please try again.");
+      }
+
+      // STRICT CATEGORY-BASED SYNC: Apply category-aware risk classification
+      // Rule: Unexpected permission → ALWAYS HIGH RISK (no downgrading)
+      // Rule: Expected permission → Can be downgraded based on semantic relevance
       if (analysis.permissions && Array.isArray(analysis.permissions)) {
         for (let i = 0; i < analysis.permissions.length; i++) {
           const ap = analysis.permissions[i];
@@ -138,13 +202,32 @@ JSON Schema:
           // Try to map to a standardized strict key using robust parser
           let basePermission = findBasePermission(pName);
 
+          // Check if this permission is expected for this category
+          const isExpected = strictExpectedPermissions.includes(basePermission || pName);
+
+          // If NOT expected → ALWAYS HIGH RISK (strict category-based rule)
+          if (!isExpected) {
+            ap.riskLevel = 'High Risk';
+            analysis.permissions[i] = ap;
+            continue;
+          }
+
+          // If expected, apply semantic matching to potentially downgrade
           let staticLevel = basePermission ? SENSITIVE_PERMISSIONS[basePermission] : ap.riskLevel;
 
           // Now fetch dynamic contextual relevance to potentially downgrade UI severity
-          const match = await semanticPermissionMatch(basePermission || pName, category);
+          let match = { score: 0 };
+          try {
+            match = await semanticPermissionMatch(basePermission || pName, category);
+          } catch (semanticError) {
+            console.warn(`Semantic match failed for ${pName}:`, semanticError);
+            // Default to 0 relevance if the local embedding model crashes
+          }
+          
+          // For expected permissions, semantic match can help determine actual usage
           const relevance = match.score;
 
-          // Downgrade rules based on contextual necessity
+          // Downgrade rules ONLY for expected permissions
           if (staticLevel === 'High Risk') {
              if (relevance > 0.85) staticLevel = 'Safe';
              else if (relevance > 0.45) staticLevel = 'Review Needed';
@@ -205,7 +288,11 @@ JSON Schema:
       ]);
 
       if (!app1Data || !app2Data) {
-        return NextResponse.json({ error: 'One or both apps not found' }, { status: 404 });
+        const error = new AppError(
+          ErrorType.NOT_FOUND,
+          'One or both apps were not found. Please check the app names and try again.'
+        );
+        return createErrorResponse(error);
       }
 
       // Hybrid Oracle: Ask AI to classify only the unknown permissions to prevent blind spots
@@ -237,65 +324,108 @@ Return ONLY a valid JSON object mapping exact permission name to Risk Level. Sch
       const app1Score = normalizeScore(app1Raw, app1Data.permissions.length);
       const app2Score = normalizeScore(app2Raw, app2Data.permissions.length);
 
-      let winnerName = app1Data.name;
-      if (app1Raw > app2Raw) {
-        winnerName = app2Data.name;
-      } else if (app1Raw === app2Raw) {
-        if (app1Data.permissions.length > app2Data.permissions.length) {
-          winnerName = app2Data.name;
-        }
-      }
+      // AI-Driven Comparison: Consider security features, encryption, and privacy policies
       const prompt = `
-Compare Privacy: "${app1Data.name}" vs "${app2Data.name}".
-The winner is ${winnerName} because it has a lower privacy risk.
+You are a privacy and security expert. Compare these two messaging/communication apps based on ACTUAL SECURITY FEATURES, not just permission counts.
 
-App 1 Perms: ${app1Data.permissions.join(', ')}
-App 2 Perms: ${app2Data.permissions.join(', ')}
+App 1: "${app1Data.name}"
+- Permissions: ${app1Data.permissions.join(', ')}
+- Category: ${app1Data.genre}
+
+App 2: "${app2Data.name}"
+- Permissions: ${app2Data.permissions.join(', ')}
+- Category: ${app2Data.genre}
+
+IMPORTANT CRITERIA FOR EVALUATION:
+1. End-to-End Encryption (E2E): Is the app's communication truly E2E encrypted by default for all users?
+2. Security Architecture: Does the app use open protocols (like Signal) or proprietary encryption?
+3. Privacy Features: Does it have disappearing messages, no message retention, minimal metadata collection?
+4. Permissions Risk: Are the requested permissions justified by the app's functionality?
+5. Security Audits: Known security audits or third-party verification?
+6. Data Minimization: Does the app collect minimal user data?
+7. Metadata Leakage: Does the app leak metadata (who talks to whom, timing)?
+
+Based on KNOWN FACTS about these apps:
+- WhatsApp: Uses Signal Protocol for E2E encryption, has E2E encryption for all chats by default, collects metadata
+- Telegram: Uses proprietary encryption (MTProto), E2E encryption (Secret Chats) is optional, does not claim to be E2E encrypted by default
+- Signal: Uses Signal Protocol, E2E encryption by default for all chats, minimal data collection
+- Other apps: Evaluate based on their known security practices
+
+Determine the WINNER based on overall privacy and security (not just permission count).
+Score each app 0-100 where 0 is worst privacy and 100 is best privacy.
 
 Guidelines:
-1. Do NOT mention any numeric scores in the verdictExplanation or comparisonSummary.
-2. For similarApps, suggest 2-3 genuine, highly reputable similar alternatives from the Google Play Store that prioritize privacy.
+1. Be thorough and factual - consider known security features of each app
+2. Do NOT just count permissions - evaluate the actual privacy implications
+3. Provide clear reasoning for why one app is safer
+4. Suggest 2-3 genuinely privacy-focused alternatives
 
-Return your entire response in valid JSON format only, with no markdown formatting.
+Return ONLY valid JSON with no markdown:
 
-JSON Schema:
 {
-  "comparisonSummary": "Brief overview of which app is safer (without numeric scores)",
-  "verdictExplanation": "Detailed explanation of why ${winnerName} won based on the perms (without numeric scores)",
-  "winner": "${winnerName}",
-  "app1Score": ${app1Score},
-  "app2Score": ${app2Score},
-  "similarApps": ["genuine privacy app 1", "genuine privacy app 2"],
+  "comparisonSummary": "Concise overview of which app is safer and why",
+  "verdictExplanation": "Detailed technical explanation of security features, encryption methods, and why one app wins",
+  "winner": "App name that is more privacy-respecting",
+  "app1Score": 65,
+  "app2Score": 72,
+  "app1Name": "${app1Data.name}",
+  "app2Name": "${app2Data.name}",
+  "securityAnalysis": {
+    "app1": {
+      "encryption": "Description of encryption (e.g., Signal Protocol, MTProto, etc.)",
+      "e2eDefault": true,
+      "metadataLeakage": "Low/Medium/High",
+      "riskFactors": ["List of privacy concerns"]
+    },
+    "app2": {
+      "encryption": "Description of encryption",
+      "e2eDefault": true,
+      "metadataLeakage": "Low/Medium/High",
+      "riskFactors": ["List of privacy concerns"]
+    }
+  },
+  "similarApps": ["App 1", "App 2"],
   "table": [
-    { "id": "location", "app1": true, "app2": false },
-    { "id": "camera", "app1": true, "app2": false },
-    { "id": "microphone", "app1": true, "app2": false },
-    { "id": "contacts", "app1": true, "app2": false },
-    { "id": "storage", "app1": true, "app2": false },
-    { "id": "phone", "app1": true, "app2": false },
-    { "id": "sms", "app1": true, "app2": false },
-    { "id": "calendar", "app1": true, "app2": false },
-    { "id": "notifications", "app1": true, "app2": false },
-    { "id": "bluetooth", "app1": true, "app2": false }
+    { "id": "location", "app1": false, "app2": false },
+    { "id": "camera", "app1": false, "app2": false },
+    { "id": "microphone", "app1": true, "app2": true },
+    { "id": "contacts", "app1": true, "app2": true },
+    { "id": "storage", "app1": true, "app2": true },
+    { "id": "phone", "app1": true, "app2": true },
+    { "id": "sms", "app1": false, "app2": false },
+    { "id": "calendar", "app1": false, "app2": false },
+    { "id": "notifications", "app1": true, "app2": true },
+    { "id": "bluetooth", "app1": false, "app2": false }
   ]
 }
 `;
 
       const result = await generateWithRetry(prompt);
       const text = result.response.text();
-      const cleanJson = text.replace(/```json\n?|```/g, '').trim();
-      const comparison = JSON.parse(cleanJson);
+      let cleanJson = text.replace(/```json\n?|```/g, '').trim();
+      
+      let comparison;
+      try {
+        comparison = JSON.parse(cleanJson);
+      } catch (e) {
+        console.error("Failed to parse AI JSON response for compare:", cleanJson);
+        throw new Error("AI generated an incomplete comparison response. Please try again.");
+      }
 
-      // Force programmatic winner and scores to prevent AI hallucination
-      comparison.winner = winnerName;
-      comparison.app1Score = app1Score;
-      comparison.app2Score = app2Score;
+      // Let AI decision stand - do NOT override with programmatic scoring
+      // AI has better knowledge of actual security features and encryption methods
 
       return NextResponse.json(comparison);
     }
   } catch (error: any) {
-    console.error('API Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const appError = error instanceof AppError 
+      ? error 
+      : new AppError(
+          error?.message?.includes('not found') ? ErrorType.NOT_FOUND : ErrorType.API_ERROR,
+          error?.message || 'Failed to analyze app. Please try again.'
+        );
+    logError(appError, { context: 'analyze_handler', appName, type });
+    return createErrorResponse(appError);
   }
 }
 

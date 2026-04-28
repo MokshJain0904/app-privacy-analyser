@@ -3,580 +3,94 @@
     "permissions": [
       {
         "name": "Location",
-        "riskLevel": "High Risk",
-        "justification": "Instagram uses location to allow users to tag posts with their current location, find nearby places or friends, and for location-based filters or stickers in Stories. It can also inform targeted advertising."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Contacts",
-        "riskLevel": "High Risk",
-        "justification": "Instagram uses contacts to help users find friends who are already on the platform or invite new friends to join. It suggests accounts to follow based on your contact list."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Storage/Files",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram needs access to storage/files to allow users to select photos and videos from their device gallery for uploading, save content from Instagram to their device, and cache app data for faster loading."
-      },
-      {
-        "name": "Notifications",
-        "riskLevel": "Safe",
-        "justification": "Instagram uses notifications to alert users about new likes, comments, followers, direct messages, live videos, and other activity relevant to their account."
-      },
-      {
-        "name": "Microphone",
-        "riskLevel": "Safe",
-        "justification": "Instagram uses the microphone to record audio for videos (Stories, Reels, posts), for live broadcasts, and for voice messages in direct messages."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Camera",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram uses the camera to allow users to take photos and videos directly within the app for posts, Stories, Reels, and live broadcasts."
+        "riskLevel": "Review Needed"
+      },
+      {
+        "name": "Microphone",
+        "riskLevel": "High Risk"
+      },
+      {
+        "name": "Notifications",
+        "riskLevel": "High Risk"
       }
     ],
-    "summary": "Instagram has a Calculated Risk Score of 53%. This means it collects and uses a moderate amount of your personal data, which is typical for a social media platform. While many permissions are necessary for its features, some require careful consideration regarding your privacy.",
-    "recommendation": "Be mindful of what you share and adjust privacy settings regularly. Consider limiting location sharing and contact syncing if you're concerned. Use strong, unique passwords.",
+    "summary": "The calculated risk score for Instagram is 42%, indicating a moderate level of risk. While most critical permissions like Location, Contacts, Storage/Files, Camera, and Microphone align with expected social app functionality and are legitimately used for features such as tagging posts, finding friends, uploading/saving media, and creating video content, the app requests access to 'Notifications'. This permission is not explicitly listed in the 'Expected Permissions' for the Social category, leading to its classification as 'High Risk' according to the provided rules.",
     "alternatives": [
       {
+        "name": "Signal",
+        "reason": "Offers end-to-end encrypted messaging and group chats, with a strong focus on user privacy and minimal data collection, providing more transparent control over notifications."
+      },
+      {
+        "name": "Mastodon",
+        "reason": "A decentralized social network that gives users more control over their data and experience, often with more granular notification settings and a commitment to privacy."
+      },
+      {
         "name": "Pixelfed",
-        "reason": "An open-source, decentralized photo-sharing platform offering more user control over data and privacy."
-      },
-      {
-        "name": "Flickr",
-        "reason": "Focuses on high-quality photo sharing with robust privacy settings for albums and individual photos."
-      },
-      {
-        "name": "VSCO",
-        "reason": "Emphasizes photo editing and a curated aesthetic community, with less emphasis on broad public sharing."
+        "reason": "An open-source, decentralized photo-sharing platform designed as a privacy-focused alternative to Instagram, allowing users more control over their content and how they receive updates."
       }
     ],
     "appName": "instagram",
     "category": "Social",
-    "overallRiskScore": 53,
+    "overallRiskScore": 42,
     "riskLabel": "Over-Permissive",
     "isUnidentified": false,
-    "cachedAt": "2026-04-14T18:20:25.580Z"
+    "cachedAt": "2026-04-28T03:02:46.664Z"
   },
-  "instagram_Camera,Microphone,Notifications,Storage/Files": {
-    "permissions": [
-      {
-        "name": "Storage/Files",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram uses this permission to access photos and videos from your device's gallery for uploading, and to save photos/videos taken within the app to your device. It also caches content for faster loading."
-      },
-      {
-        "name": "Microphone",
-        "riskLevel": "Safe",
-        "justification": "This permission is used when you record videos with audio for Stories, Reels, or direct messages, and for sending voice messages in chats or participating in live audio rooms."
-      },
-      {
-        "name": "Camera",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram requires camera access to allow you to take photos and record videos directly within the app for posts, Stories, Reels, and video calls."
-      },
-      {
-        "name": "Notifications",
-        "riskLevel": "Safe",
-        "justification": "The app uses notifications to alert you about new likes, comments, followers, direct messages, mentions, live broadcasts, and other account activity."
-      }
-    ],
-    "summary": "Instagram has a Calculated Risk Score of 33%. This score indicates a moderate level of privacy concern, primarily due to the extensive data collection inherent in its social media functionality.",
-    "recommendation": "Use Instagram with caution, especially regarding the personal information you share. Regularly review your privacy settings and limit data access where possible.",
-    "alternatives": [
-      {
-        "name": "Flickr",
-        "reason": "Primarily focused on photo sharing with less emphasis on personal data collection and social tracking compared to Instagram."
-      },
-      {
-        "name": "Signal",
-        "reason": "Offers end-to-end encrypted messaging and secure sharing of photos/videos with a strong privacy focus and minimal data collection."
-      },
-      {
-        "name": "Local Photo Gallery/Cloud Storage (e.g., Google Photos with strict privacy settings)",
-        "reason": "Allows for personal photo and video storage without public sharing, keeping content private or shared only with chosen individuals."
-      }
-    ],
-    "appName": "Instagram",
-    "category": "Social",
-    "overallRiskScore": 33,
-    "riskLabel": "Over-Permissive",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-14T18:33:22.576Z"
-  },
-  "instagram_Camera,Microphone": {
-    "permissions": [
-      {
-        "name": "Microphone",
-        "riskLevel": "Safe",
-        "justification": "Used for recording audio in stories, reels, live videos, and direct messages (voice notes), as well as during video calls."
-      },
-      {
-        "name": "Camera",
-        "riskLevel": "Review Needed",
-        "justification": "Used for taking photos and videos for posts, stories, reels, and direct messages, as well as during live videos and video calls."
-      }
-    ],
-    "summary": "Instagram has a Calculated Risk Score of 22%. This indicates a relatively low privacy risk, meaning the app generally uses your data as expected for its social functions.",
-    "recommendation": "We recommend regularly reviewing your in-app privacy settings. Only grant permissions when actively using features that require them, like the camera for photos.",
-    "alternatives": [
-      {
-        "name": "Mastodon",
-        "reason": "A decentralized, open-source social network offering more user control over data and privacy."
-      },
-      {
-        "name": "Signal",
-        "reason": "Provides end-to-end encrypted messaging and calls for private sharing with close contacts, with a strong focus on privacy."
-      },
-      {
-        "name": "Vero",
-        "reason": "An ad-free social network that claims better privacy practices and a chronological feed, without data mining."
-      }
-    ],
-    "appName": "Instagram",
-    "category": "Social",
-    "overallRiskScore": 22,
-    "riskLabel": "Safe",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-14T19:52:01.000Z"
-  },
-  "instagram_Camera,Microphone,Storage/Files": {
-    "permissions": [
-      {
-        "name": "Storage/Files",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram uses this permission to allow users to upload photos and videos from their device's gallery to create posts, stories, and reels. It also enables saving media created within the app to the device's storage."
-      },
-      {
-        "name": "Camera",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram utilizes the camera to enable users to capture photos and videos directly within the app for immediate sharing as posts, stories, reels, or during live broadcasts."
-      },
-      {
-        "name": "Microphone",
-        "riskLevel": "Safe",
-        "justification": "Instagram requires microphone access to record audio for videos created within the app (e.g., stories, reels, posts), for live broadcasts, and for sending voice messages in direct messages."
-      }
-    ],
-    "summary": "Instagram has a Calculated Risk Score of 28%. This score indicates a moderate level of privacy risk, which is typical for a social media application that relies heavily on user-generated content and connectivity.",
-    "recommendation": "Use Instagram with awareness of its data collection practices. Adjust in-app privacy settings to your comfort level and limit the personal information you share.",
-    "alternatives": [
-      {
-        "name": "Pixelfed",
-        "reason": "An open-source, decentralized photo-sharing platform that offers more user control over data and privacy, similar to Instagram but without corporate data mining."
-      },
-      {
-        "name": "Vero",
-        "reason": "Promotes itself as a 'true social' app with no ads, no algorithms, and no data mining, focusing on a chronological feed and user privacy."
-      },
-      {
-        "name": "Signal (Stories)",
-        "reason": "While primarily a messenger, its 'Stories' feature allows private sharing of photos and videos with selected contacts, offering a highly secure and private alternative for visual content sharing."
-      }
-    ],
-    "appName": "Instagram",
-    "category": "Social",
-    "overallRiskScore": 28,
-    "riskLabel": "Over-Permissive",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-14T20:45:22.081Z"
-  },
-  "pixelfed_Location,Storage/Files": {
+  "snapchat_Camera,Contacts,Location,Microphone,Notifications,Storage/Files": {
     "permissions": [
       {
         "name": "Location",
-        "riskLevel": "High Risk",
-        "justification": "Pixelfed can use your precise location to allow you to optionally geotag your posts, adding location context to your shared photos and videos."
-      },
-      {
-        "name": "Storage/Files",
-        "riskLevel": "Review Needed",
-        "justification": "The app needs to read files from your device storage to allow you to select photos and videos for uploading. It also needs to modify or delete files to save downloaded media, cache content, and manage temporary files essential for media sharing."
-      }
-    ],
-    "summary": "The Calculated Risk Score for Pixelfed is 22%. This low score indicates the app generally handles your data responsibly with minimal privacy concerns for its core functions.",
-    "recommendation": "Pixelfed is generally safe for social sharing. Be mindful of your location sharing settings if you prefer not to geotag your posts.",
-    "alternatives": [
-      {
-        "name": "Mastodon",
-        "reason": "Another federated, open-source social network with a strong focus on user privacy and control."
-      },
-      {
-        "name": "Diaspora*",
-        "reason": "An open-source, decentralized social network designed with user privacy and data ownership as core principles."
-      },
-      {
-        "name": "Minds",
-        "reason": "An open-source social media platform that emphasizes privacy, transparency, and user control over their data."
-      }
-    ],
-    "appName": "Pixelfed",
-    "category": "Social",
-    "overallRiskScore": 22,
-    "riskLabel": "Safe",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-14T20:45:57.622Z"
-  },
-  "calculator_Calendar,Camera,Contacts,Location,Microphone,Nearby Devices/Bluetooth,Notifications,Phone/Call Logs,SMS,Storage/Files": {
-    "permissions": [
-      {
-        "name": "Location",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator does not require location data for its core functionality."
-      },
-      {
-        "name": "Camera",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A standard calculator app does not require camera access."
-      },
-      {
-        "name": "Microphone",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A standard calculator app does not require microphone access."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Contacts",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator does not need access to your contacts."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Storage/Files",
-        "riskLevel": "Review Needed",
-        "justification": "May be used to store calculation history, user preferences, or custom functions. However, broad access to 'USB storage' is generally not required for a basic calculator."
-      },
-      {
-        "name": "Phone/Call Logs",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator does not require access to phone or call logs."
-      },
-      {
-        "name": "SMS",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator does not require access to send or read SMS messages."
-      },
-      {
-        "name": "Calendar",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator does not require access to your calendar."
-      },
-      {
-        "name": "Nearby Devices/Bluetooth",
-        "riskLevel": "Review Needed",
-        "justification": "Not actively used. A standard calculator app does not require Bluetooth or nearby device access."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Notifications",
-        "riskLevel": "Review Needed",
-        "justification": "May be used to display persistent notifications for quick access or reminders. However, this can also be used for unsolicited content."
-      }
-    ],
-    "summary": "Calculated Risk Score: 100%. This means the app requests many unnecessary permissions, posing a significant risk to your personal data and privacy. It accesses sensitive areas of your device without a clear functional need.",
-    "recommendation": "Do not install or immediately uninstall this app. Use your device's built-in calculator or a trusted alternative instead. Protect your privacy by avoiding apps with excessive permissions.",
-    "alternatives": [
-      {
-        "name": "Google Calculator",
-        "reason": "Pre-installed on many Android devices, minimal permissions, and trusted developer."
-      },
-      {
-        "name": "System Calculator (built-in)",
-        "reason": "Comes with your phone, requires no extra permissions, and is perfectly safe."
-      },
-      {
-        "name": "Simple Calculator (by Simple Mobile Tools)",
-        "reason": "Open-source, privacy-focused, and requests only essential permissions."
-      }
-    ],
-    "appName": "Calculator",
-    "category": "Tools",
-    "overallRiskScore": 100,
-    "riskLabel": "Risky",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-17T17:16:01.792Z"
-  },
-  "calculator_Calendar,Contacts,Location,Microphone,Notifications,Phone/Call Logs,SMS": {
-    "permissions": [
-      {
-        "name": "Location",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator app does not require access to your precise or approximate location for its core functionality."
-      },
-      {
-        "name": "Microphone",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator app does not require access to your microphone or the ability to record audio for its core functionality."
-      },
-      {
-        "name": "Contacts",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator app does not require access to your contacts for its core functionality."
-      },
-      {
-        "name": "Phone/Call Logs",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator app does not require access to your phone status, identity, or call logs for its core functionality."
-      },
-      {
-        "name": "SMS",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator app does not require the ability to send or read SMS messages for its core functionality."
-      },
-      {
-        "name": "Calendar",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A calculator app does not require access to your calendar events for its core functionality."
-      },
-      {
-        "name": "Notifications",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used. A basic calculator app does not require the ability to send notifications for its core functionality."
-      }
-    ],
-    "summary": "This Calculator app has an extremely high privacy risk score of 98%. This means it requests many unnecessary and intrusive permissions that could severely compromise your personal data and device security.",
-    "recommendation": "We strongly advise against installing or using this app. If already installed, delete it immediately to protect your privacy and device.",
-    "alternatives": [
-      {
-        "name": "Google Calculator",
-        "reason": "Pre-installed on many Android devices, it is a reliable and privacy-focused option with minimal permissions."
-      },
-      {
-        "name": "Simple Calculator by Simple Mobile Tools",
-        "reason": "Known for creating open-source, privacy-respecting apps with only essential permissions."
-      },
-      {
-        "name": "Your Device's Built-in Calculator",
-        "reason": "The calculator app that comes pre-installed with your phone's operating system is generally the safest and most trusted option."
-      }
-    ],
-    "appName": "Calculator",
-    "category": "Tools",
-    "overallRiskScore": 98,
-    "riskLabel": "Risky",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-17T17:20:27.611Z"
-  },
-  "instagram _Camera,Contacts,Location,Microphone,Notifications,Storage/Files": {
-    "permissions": [
-      {
-        "name": "Notifications",
-        "riskLevel": "Safe",
-        "justification": "Instagram uses notifications to alert users about new posts, likes, comments, direct messages, live videos, and other activity related to their account and connections."
-      },
-      {
-        "name": "Storage/Files",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram uses storage to save photos/videos taken within the app, cache content for faster loading, and allow users to upload existing photos/videos from their device gallery."
-      },
-      {
-        "name": "Location",
-        "riskLevel": "High Risk",
-        "justification": "Instagram uses location for features like tagging posts with a location, finding nearby places, and showing location-based filters or stories. It can also be used for geotagging photos/videos."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Camera",
-        "riskLevel": "Review Needed",
-        "justification": "Instagram uses the camera to allow users to take photos and videos directly within the app for posts, stories, reels, and direct messages."
-      },
-      {
-        "name": "Contacts",
-        "riskLevel": "High Risk",
-        "justification": "Instagram uses contacts to help users find friends who are already on Instagram or invite friends to join. It can suggest accounts to follow based on the user's contact list."
+        "riskLevel": "High Risk"
       },
       {
         "name": "Microphone",
-        "riskLevel": "Safe",
-        "justification": "Instagram uses the microphone to record audio for videos (stories, reels, posts), live broadcasts, and voice messages in direct messages."
+        "riskLevel": "High Risk"
       }
     ],
-    "summary": "Instagram has a Calculated Risk Score of 53%, meaning it carries a moderate level of privacy risk due to its extensive data collection for social features. While many permissions are essential for the app to function, some require careful consideration regarding your personal data.",
-    "recommendation": "Review your privacy settings within Instagram regularly and only grant permissions like location and contacts if you actively use those specific features. Be mindful of the personal information you share on the platform.",
+    "summary": "This app has a Calculated Risk Score of 42%. We performed a deterministic static analysis because the AI engine was temporarily rate-limited.",
     "alternatives": [
       {
-        "name": "Signal",
-        "reason": "Offers strong end-to-end encryption for messaging and group communication, with a focus on user privacy and minimal data collection."
+        "name": "Search F-Droid",
+        "reason": "Open-source privacy-respecting alternatives are usually available on F-Droid."
       },
       {
-        "name": "Mastodon",
-        "reason": "A decentralized social network where users have more control over their data and can choose their server, reducing centralized data collection."
-      },
-      {
-        "name": "Pixelfed",
-        "reason": "An open-source, federated photo-sharing platform that provides a privacy-focused alternative to Instagram, allowing users to host their own instances."
+        "name": "Web Version",
+        "reason": "Using the website version of the app in a private browser often requires fewer permissions."
       }
     ],
-    "appName": "Instagram ",
-    "category": "Social",
-    "overallRiskScore": 53,
+    "appName": "Snapchat",
+    "category": "Communication",
+    "overallRiskScore": 42,
     "riskLabel": "Over-Permissive",
     "isUnidentified": false,
-    "cachedAt": "2026-04-19T15:06:18.066Z"
-  },
-  "mastodon_": {
-    "permissions": [
-      {
-        "name": "read the contents of your USB storage",
-        "riskLevel": "High Risk",
-        "justification": "Used to allow users to select photos, videos, or other media files from their device storage to attach to posts or profile pictures."
-      },
-      {
-        "name": "modify or delete the contents of your USB storage",
-        "riskLevel": "Review Needed",
-        "justification": "Used to save downloaded media (e.g., images, videos) from posts to the device's storage, or to manage temporary files created by the app."
-      },
-      {
-        "name": "read phone status and identity",
-        "riskLevel": "High Risk",
-        "justification": "Used for device identification, primarily for push notification services (e.g., Firebase Cloud Messaging) and anonymous crash reporting to improve app stability."
-      },
-      {
-        "name": "view network connections",
-        "riskLevel": "Safe",
-        "justification": "Essential for the app to determine if the device has an active internet connection before attempting to fetch or send data, preventing errors and optimizing user experience."
-      },
-      {
-        "name": "full network access",
-        "riskLevel": "High Risk",
-        "justification": "Absolutely essential for any online application to communicate with Mastodon servers, send posts, receive updates, and load content."
-      },
-      {
-        "name": "prevent device from sleeping",
-        "riskLevel": "Safe",
-        "justification": "Allows the app to keep the device awake for short periods to complete background tasks, such as uploading media, receiving push notifications, or syncing data."
-      },
-      {
-        "name": "take pictures and videos",
-        "riskLevel": "Safe",
-        "justification": "Enables the in-app camera functionality, allowing users to capture photos or videos directly within the app to include in their posts."
-      },
-      {
-        "name": "view Wi-Fi connections",
-        "riskLevel": "Safe",
-        "justification": "Used to check the status of Wi-Fi connectivity, which can help the app optimize data usage (e.g., prioritize Wi-Fi for large downloads) or ensure stable connections."
-      },
-      {
-        "name": "control vibration",
-        "riskLevel": "Safe",
-        "justification": "Used to provide haptic feedback for notifications, such as new mentions, replies, or direct messages."
-      },
-      {
-        "name": "record audio",
-        "riskLevel": "High Risk",
-        "justification": "Used to allow users to record and attach audio messages or clips to their posts, if they choose to use this feature."
-      },
-      {
-        "name": "change your audio settings",
-        "riskLevel": "High Risk",
-        "justification": "Used to manage audio output during media playback within the app or when recording audio, ensuring proper volume and routing."
-      },
-      {
-        "name": "approximate location (network-based)",
-        "riskLevel": "High Risk",
-        "justification": "Used if the user chooses to tag their posts with their approximate location, using Wi-Fi and mobile network data for estimation."
-      },
-      {
-        "name": "pair with Bluetooth devices",
-        "riskLevel": "Review Needed",
-        "justification": "Not actively used."
-      },
-      {
-        "name": "run at startup",
-        "riskLevel": "Safe",
-        "justification": "Allows the app to start background services when the device boots up, ensuring that notifications and background synchronization function correctly without manual intervention."
-      },
-      {
-        "name": "precise location (GPS and network-based)",
-        "riskLevel": "High Risk",
-        "justification": "Used if the user chooses to tag their posts with a more accurate location, utilizing GPS and network data for precise positioning."
-      },
-      {
-        "name": "read Google service configuration",
-        "riskLevel": "High Risk",
-        "justification": "Used by Google Play Services for various functionalities, primarily for setting up and managing push notifications (Firebase Cloud Messaging)."
-      },
-      {
-        "name": "draw over other apps",
-        "riskLevel": "Safe",
-        "justification": "Not actively used."
-      },
-      {
-        "name": "Google Play license check",
-        "riskLevel": "Safe",
-        "justification": "A standard security measure used by Google Play to verify the legitimacy of the app and ensure it was legally obtained."
-      },
-      {
-        "name": "find accounts on the device",
-        "riskLevel": "High Risk",
-        "justification": "Used by Google Play Services, primarily for linking the app to a Google account for push notification setup (Firebase Cloud Messaging) or other Google service integrations."
-      },
-      {
-        "name": "change network connectivity",
-        "riskLevel": "Review Needed",
-        "justification": "Not actively used."
-      },
-      {
-        "name": "connect and disconnect from Wi-Fi",
-        "riskLevel": "Safe",
-        "justification": "Not actively used."
-      },
-      {
-        "name": "read your contacts",
-        "riskLevel": "High Risk",
-        "justification": "Not actively used."
-      }
-    ],
-    "summary": "Mastodon has a Calculated Risk Score of 0%, indicating it is perfectly safe regarding its requested permissions. The app only asks for permissions essential for its social networking features, with no identified privacy concerns.",
-    "recommendation": "We recommend Mastodon for its strong privacy focus and open-source nature. Ensure you only grant permissions you intend to use, like camera for photos or location for tagging.",
-    "alternatives": [
-      {
-        "name": "Pleroma",
-        "reason": "Another lightweight, open-source, and federated social network, offering a similar privacy-focused experience."
-      },
-      {
-        "name": "Misskey",
-        "reason": "An open-source, federated social network with a unique interface and features, also part of the Fediverse."
-      },
-      {
-        "name": "Friendica",
-        "reason": "A comprehensive federated social network that emphasizes privacy and can connect with various other social platforms."
-      }
-    ],
-    "appName": "Mastodon",
-    "category": "Social",
-    "overallRiskScore": 0,
-    "riskLabel": "Safe",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-19T15:09:34.527Z"
-  },
-  "mastodon_Camera,Microphone": {
-    "permissions": [
-      {
-        "name": "Microphone",
-        "riskLevel": "Safe",
-        "justification": "Used when a user chooses to record and attach audio to a post or video within the app."
-      },
-      {
-        "name": "Camera",
-        "riskLevel": "Review Needed",
-        "justification": "Used when a user chooses to take photos or record videos directly within the app to attach to a post or update profile media."
-      }
-    ],
-    "summary": "Mastodon has a Calculated Risk Score of 22%, indicating a low privacy risk. This means the app generally respects your privacy, but some data handling or permissions might go slightly beyond the bare minimum for its function.",
-    "recommendation": "Mastodon is a good choice for social networking with a focus on user control. Grant permissions only when you intend to use the related feature, like recording audio or taking photos.",
-    "alternatives": [
-      {
-        "name": "Pleroma",
-        "reason": "Another federated social network, often more lightweight and privacy-focused, with self-hosting options."
-      },
-      {
-        "name": "Friendica",
-        "reason": "A federated social network that emphasizes privacy and allows connections across various platforms."
-      },
-      {
-        "name": "Diaspora*",
-        "reason": "A decentralized, user-owned social network with a strong emphasis on privacy and data control."
-      }
-    ],
-    "appName": "Mastodon",
-    "category": "Social",
-    "overallRiskScore": 22,
-    "riskLabel": "Safe",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-19T15:09:48.077Z"
+    "cachedAt": "2026-04-28T03:40:20.951Z"
   }
 }

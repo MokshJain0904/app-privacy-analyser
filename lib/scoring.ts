@@ -80,3 +80,77 @@ export function normalizeScore(rawScore: number, totalPermissions: number) {
   
   return Math.min(100, Math.round(normalized));
 }
+
+/**
+ * Recalculate risk score from permission risk levels
+ * Used when permissions are modified in cache to ensure score stays in sync
+ * Works backwards from risk level classifications to numerical score
+ */
+export function recalculateScoreFromRiskLevels(
+  permissions: Array<{ name: string; riskLevel: string }>
+): number {
+  if (!permissions || permissions.length === 0) return 0;
+
+  // Count permissions by risk level
+  const safeCount = permissions.filter(p => p.riskLevel === 'Safe').length;
+  const reviewCount = permissions.filter(p => p.riskLevel === 'Review Needed').length;
+  const highRiskCount = permissions.filter(p => p.riskLevel === 'High Risk').length;
+
+  // Get current weights
+  const weights = getWeights();
+
+  // Calculate raw score assuming these are all unexpected permissions
+  // (conservative approach - we don't know if they're expected or not from just risk levels)
+  const rawScore =
+    (safeCount * weights.safeUnexpected) +
+    (reviewCount * weights.reviewNeededUnexpected) +
+    (highRiskCount * weights.highRiskUnexpected);
+
+  // Normalize and return
+  const normalized = normalizeScore(rawScore, permissions.length);
+  return normalized;
+}
+
+/**
+ * Categorize risk level from score
+ */
+export function getRiskLabelFromScore(score: number): string {
+  if (score <= 25) return 'Safe';
+  if (score <= 60) return 'Over-Permissive';
+  return 'Risky';
+}
+
+/**
+ * STRICT CATEGORY-BASED SCORING
+ * If permission is NOT expected for this category → HIGH RISK
+ * If permission IS expected → Check if sensitive (Review Needed) or safe (Safe)
+ * 
+ * Used for deterministic permission risk classification
+ */
+export function getStrictCategoryBasedRiskLevel(
+  permission: string,
+  expectedPermissionsForCategory: string[],
+  allSensitivePermissions: Record<string, string>
+): string {
+  // First check: Is this permission expected for this category?
+  const isExpected = expectedPermissionsForCategory.includes(permission);
+
+  // If NOT expected → ALWAYS HIGH RISK
+  if (!isExpected) {
+    return 'High Risk';
+  }
+
+  // If expected, check if it's sensitive
+  const riskLevel = allSensitivePermissions[permission];
+  
+  if (riskLevel === 'High Risk') {
+    // Expected High Risk permission = Review Needed (user is aware they're granting it)
+    return 'Review Needed';
+  } else if (riskLevel === 'Review Needed') {
+    // Expected Review permission = Safe in this context
+    return 'Safe';
+  } else {
+    // Safe permissions are always Safe
+    return 'Safe';
+  }
+}

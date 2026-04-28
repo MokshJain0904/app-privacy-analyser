@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 import gplay from 'google-play-scraper';
+import { ErrorType, AppError, createErrorResponse, logError } from '@/lib/error-handler';
 
 
 // Wrap handler with rate limiting for app suggestions
@@ -9,7 +10,8 @@ async function handler(request: NextRequest) {
   const appName = searchParams.get('appName');
 
   if (!appName) {
-    return NextResponse.json({ error: 'App name is required', suggestions: [] }, { status: 400 });
+    const error = new AppError(ErrorType.VALIDATION, 'Please provide an app name to search.');
+    return NextResponse.json({ error: error.userMessage, suggestions: [] }, { status: error.statusCode });
   }
 
   try {
@@ -28,8 +30,14 @@ async function handler(request: NextRequest) {
 
     return NextResponse.json({ suggestions });
   } catch (error: any) {
-    console.error('App suggestion error:', error);
-    return NextResponse.json({ error: 'Failed to fetch suggestions', suggestions: [] }, { status: 500 });
+    const appError = error instanceof AppError
+      ? error
+      : new AppError(
+          ErrorType.NETWORK_ERROR,
+          'Failed to fetch app suggestions. Please try again.'
+        );
+    logError(appError, { context: 'app_suggestions_handler', appName });
+    return NextResponse.json({ error: appError.userMessage, suggestions: [] }, { status: appError.statusCode });
   }
 }
 

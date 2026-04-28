@@ -1,14 +1,19 @@
 /**
  * Permission Usage Tracking & Leakage Detection
- * Analyzes if declared permissions align with typical usage patterns
+ *
+ * All category names use CanonicalCategory from permissions-db.ts.
+ * Scoring uses an asymptotic decay curve to prevent dilution.
+ * Double-scoring is prevented via a Set of already-scored permissions.
  */
+
+import { normalizeCategory, CanonicalCategory } from './permissions-db';
 
 export interface PermissionUsageAnalysis {
   permission: string;
   userFriendlyName: string;
   isDeclared: boolean;
-  typicalUsage: boolean; // Is this permission typically used by this category?
-  leakageRisk: 'NORMAL' | 'SUSPICIOUS' | 'CRITICAL'; // Based on mismatch
+  typicalUsage: boolean;
+  leakageRisk: 'NORMAL' | 'SUSPICIOUS' | 'CRITICAL';
   recommendation: string;
 }
 
@@ -22,292 +27,376 @@ export interface UsageComparisonResult {
   overallAssessment: string;
 }
 
-/**
- * Typical permission usage patterns by app category
- * Based on Google Play Store best practices
- * true = typically needed, false = suspicious/unexpected
- */
-const CATEGORY_PERMISSION_PATTERNS: Record<string, Record<string, boolean>> = {
+// ============================================================
+// CATEGORY PERMISSION PATTERNS
+// Keys MUST be CanonicalCategory names from permissions-db.ts.
+// true  = typically expected for this category
+// false = suspicious / unexpected for this category
+// Missing key = no opinion (neutral)
+// ============================================================
+const CATEGORY_PERMISSION_PATTERNS: Partial<Record<CanonicalCategory, Record<string, boolean>>> = {
   'Social Media': {
     'CAMERA': true,
     'RECORD_AUDIO': true,
-    'ACCESS_FINE_LOCATION': false, // SUSPICIOUS - why does Instagram need location?
-    'ACCESS_COARSE_LOCATION': false, // SUSPICIOUS
-    'READ_CONTACTS': false, // SUSPICIOUS - collecting contact data without disclosure
-    'READ_CALL_LOG': false, // CRITICAL - major privacy violation
-    'READ_PHONE_STATE': false, // SUSPICIOUS
-    'READ_SMS': false, // CRITICAL - should never request this
-    'ACCESS_MEDIA_LOCATION': false, // SUSPICIOUS
+    'READ_EXTERNAL_STORAGE': true,
+    'ACCESS_FINE_LOCATION': false,    // Not core to social functionality
+    'ACCESS_COARSE_LOCATION': false,
+    'READ_CONTACTS': false,           // Building social graphs without disclosure
+    'READ_CALL_LOG': false,           // CRITICAL
+    'READ_PHONE_STATE': false,
+    'READ_SMS': false,                // CRITICAL
     'READ_CALENDAR': false,
   },
-  'Maps': {
+  'Maps & Navigation': {
     'ACCESS_FINE_LOCATION': true,
     'ACCESS_COARSE_LOCATION': true,
     'CAMERA': false,
     'RECORD_AUDIO': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
-  'Banking': {
+  'Finance': {
     'INTERNET': true,
-    'READ_PHONE_STATE': true, // For fraud detection
-    'CAMERA': false, // Only for check deposit, suspicious if always
+    'READ_PHONE_STATE': true,         // Legitimate fraud-detection use
+    'CAMERA': false,                  // Suspicious: only justified for QR/check deposit
     'ACCESS_FINE_LOCATION': false,
-    'RECORD_AUDIO': false, // Should NEVER need this
+    'RECORD_AUDIO': false,            // Should NEVER be requested
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
-  'Health': {
+  'Health & Fitness': {
     'BODY_SENSORS': true,
-    'ACCESS_FINE_LOCATION': true, // Some health apps track location
+    'ACCESS_FINE_LOCATION': true,
     'CAMERA': false,
-    'READ_CALENDAR': true, // Appointment tracking
+    'READ_CALENDAR': true,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
-  'Video Streaming': {
+  'Entertainment': {
     'CAMERA': false,
     'RECORD_AUDIO': false,
     'INTERNET': true,
     'ACCESS_FINE_LOCATION': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
-  'News': {
+  'News & Magazines': {
     'INTERNET': true,
-    'READ_CALENDAR': false,
     'ACCESS_FINE_LOCATION': false,
     'CAMERA': false,
     'RECORD_AUDIO': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Shopping': {
-    'CAMERA': true, // Barcode scanning, AR
-    'READ_CONTACTS': false, // Suspicious
-    'ACCESS_FINE_LOCATION': true, // Store locator
+    'CAMERA': true,                   // Barcode scanning, AR
+    'ACCESS_FINE_LOCATION': true,     // Store locator / delivery
+    'ACCESS_COARSE_LOCATION': true,
+    'RECORD_AUDIO': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Education': {
-    'CAMERA': true, // Video calling, recordings
+    'CAMERA': true,
     'RECORD_AUDIO': true,
-    'READ_CALENDAR': true, // Schedule management
+    'READ_CALENDAR': true,
     'ACCESS_FINE_LOCATION': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Games': {
-    'CAMERA': false, // Unless AR games
-    'RECORD_AUDIO': false,
-    'ACCESS_FINE_LOCATION': false, // Unless location-based
-    'READ_CONTACTS': false, // Should NEVER need
-  },
-  'Tools': {
-    'CAMERA': false, // Depends on tool type
-    'RECORD_AUDIO': false,
-  },
-  'Utilities': {
     'CAMERA': false,
     'RECORD_AUDIO': false,
+    'ACCESS_FINE_LOCATION': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
+  },
+  'Tools': {
+    'CAMERA': false,
+    'RECORD_AUDIO': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'ACCESS_FINE_LOCATION': false,
+    'READ_CALL_LOG': false,
   },
   'Messaging': {
     'RECORD_AUDIO': true,
     'CAMERA': true,
     'READ_CONTACTS': true,
     'READ_CALENDAR': false,
+    'ACCESS_FINE_LOCATION': false,
+    'READ_CALL_LOG': false,           // Even messaging apps shouldn't need call logs
+    'READ_SMS': true,                 // SMS apps legitimately need this
   },
   'Photography': {
     'CAMERA': true,
-    'ACCESS_FINE_LOCATION': true, // Geo-tagging
-  },
-  'Lifestyle': {
-    'CAMERA': false,        // Rarely needed
-    'RECORD_AUDIO': false,  // No clear use-case
-    'ACCESS_FINE_LOCATION': true, // Expected — delivery, local services, hyperlocal apps
-    'READ_CONTACTS': false, // No need to read contacts
-    'READ_CALL_LOG': false, // CRITICAL
-    'READ_SMS': false,      // CRITICAL
-  },
-  'Food & Drink': {
-    'CAMERA': true,         // Food photo sharing
-    'ACCESS_FINE_LOCATION': true, // Restaurant finder / delivery
+    'ACCESS_FINE_LOCATION': true,     // Geo-tagging
+    'READ_EXTERNAL_STORAGE': true,
+    'WRITE_EXTERNAL_STORAGE': true,
     'RECORD_AUDIO': false,
     'READ_CONTACTS': false,
     'READ_SMS': false,
+    'READ_CALL_LOG': false,
+  },
+  'Lifestyle': {
+    'ACCESS_FINE_LOCATION': true,
+    'ACCESS_COARSE_LOCATION': true,
+    'CAMERA': false,
+    'RECORD_AUDIO': false,
+    'READ_CONTACTS': false,
+    'READ_CALL_LOG': false,           // CRITICAL
+    'READ_SMS': false,                // CRITICAL
+  },
+  'Food & Drink': {
+    'CAMERA': true,
+    'ACCESS_FINE_LOCATION': true,
+    'ACCESS_COARSE_LOCATION': true,
+    'RECORD_AUDIO': false,
+    'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Travel & Local': {
     'ACCESS_FINE_LOCATION': true,
+    'ACCESS_COARSE_LOCATION': true,
     'CAMERA': true,
     'RECORD_AUDIO': false,
     'READ_CONTACTS': false,
     'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Beauty': {
-    'CAMERA': true,         // AR try-on features
+    'CAMERA': true,                   // AR try-on features
     'ACCESS_FINE_LOCATION': false,
     'RECORD_AUDIO': false,
     'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Business': {
     'CAMERA': true,
-    'RECORD_AUDIO': true,   // Meetings
-    'READ_CONTACTS': true,  // Business contacts
+    'RECORD_AUDIO': true,             // Meetings
+    'READ_CONTACTS': true,            // Business contacts
     'ACCESS_FINE_LOCATION': false,
     'READ_SMS': false,
-  },
-  'Finance': {
-    'READ_PHONE_STATE': true, // Fraud detection
-    'CAMERA': false,
-    'RECORD_AUDIO': false,
-    'ACCESS_FINE_LOCATION': false,
-    'READ_CONTACTS': false,
-    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Weather': {
     'ACCESS_FINE_LOCATION': true,
+    'ACCESS_COARSE_LOCATION': true,
     'CAMERA': false,
     'RECORD_AUDIO': false,
     'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Sports': {
     'ACCESS_FINE_LOCATION': false,
     'CAMERA': false,
     'RECORD_AUDIO': false,
     'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
   'Music & Audio': {
     'RECORD_AUDIO': true,
     'CAMERA': false,
     'ACCESS_FINE_LOCATION': false,
     'READ_CONTACTS': false,
+    'READ_SMS': false,
+    'READ_CALL_LOG': false,
   },
 };
 
-/**
- * Permissions that should NEVER be requested
- */
-const DANGEROUS_PERMISSION_COMBINATIONS: string[] = [
-  'RECORD_AUDIO', // For news apps, games, etc.
-  'ACCESS_FINE_LOCATION', // For shopping apps that don't need it
-  'READ_CONTACTS', // For video apps, weather apps
+// ============================================================
+// LEAKAGE POINT VALUES — per permission risk level
+// ============================================================
+const LEAKAGE_POINTS: Record<string, number> = {
+  'READ_CALL_LOG': 40,
+  'WRITE_CALL_LOG': 40,
+  'READ_SMS': 40,
+  'SEND_SMS': 35,
+  'WRITE_SMS': 35,
+  'READ_CONTACTS': 25,
+  'RECORD_AUDIO': 25,
+  'READ_PHONE_STATE': 20,
+  'ACCESS_FINE_LOCATION': 20,
+  'ACCESS_COARSE_LOCATION': 15,
+  'READ_CALENDAR': 15,
+  'CAMERA': 15,
+  // Default for any other flagged permission
+  '_default': 15,
+};
+
+function getLeakagePoints(permission: string): number {
+  return LEAKAGE_POINTS[permission] ?? LEAKAGE_POINTS['_default'];
+}
+
+function getLeakageRisk(permission: string): 'SUSPICIOUS' | 'CRITICAL' {
+  const critical = [
+    'READ_CALL_LOG', 'WRITE_CALL_LOG',
+    'READ_SMS', 'SEND_SMS', 'WRITE_SMS',
+    'READ_CONTACTS', 'RECORD_AUDIO',
+  ];
+  return critical.includes(permission) ? 'CRITICAL' : 'SUSPICIOUS';
+}
+
+function getRiskRecommendation(permission: string, categoryName: string): string {
+  switch (permission) {
+    case 'READ_CONTACTS':
+      return `${categoryName} apps do not need your contact list. This is typically used for data profiling. Strongly consider rejecting this permission.`;
+    case 'RECORD_AUDIO':
+      return `${categoryName} apps have no clear use for microphone access. This could enable covert audio recording. Reject this permission.`;
+    case 'ACCESS_FINE_LOCATION':
+      return `${categoryName} apps don't need your precise GPS location. This enables constant movement tracking without a clear purpose.`;
+    case 'ACCESS_COARSE_LOCATION':
+      return `${categoryName} apps don't need your location. Consider rejecting this permission.`;
+    case 'READ_CALL_LOG':
+      return '🚨 Accessing your call log history is a severe privacy violation. Only the native Phone/Dialer app should ever need this. Do NOT install this app.';
+    case 'READ_SMS':
+    case 'SEND_SMS':
+      return '🚨 Accessing your SMS messages is a critical privacy violation – this allows reading banking OTP codes and private conversations. Do NOT install this app.';
+    case 'READ_CALENDAR':
+      return `${categoryName} apps do not need access to your calendar events and appointments.`;
+    case 'READ_PHONE_STATE':
+      return `${categoryName} apps should not need your device/phone identifiers. This can be used to uniquely track your device.`;
+    default:
+      return `${permission} is unusual for ${categoryName} apps and may indicate data collection beyond core functionality.`;
+  }
+}
+
+// Categories where location access is expected/typical
+const LOCATION_SAFE_CATEGORIES: CanonicalCategory[] = [
+  'Maps & Navigation', 'Travel & Local', 'Food & Drink',
+  'Shopping', 'Health & Fitness', 'Weather', 'Photography', 'Lifestyle',
 ];
 
+// ============================================================
+// MAIN ANALYSIS FUNCTION
+// ============================================================
 /**
- * Analyze permission usage and detect potential leakage
+ * Analyze declared permissions for suspicious data leakage patterns.
+ * - Uses CanonicalCategory from permissions-db.ts (no separate DB).
+ * - Prevents double-scoring via a Set of already-scored permissions.
+ * - Normalizes the final score with an asymptotic decay curve.
  */
 export function analyzePermissionUsage(
   declaredPermissions: string[],
   appCategory: string,
   userFriendlyPermissions: Record<string, string[]>
 ): UsageComparisonResult {
-  const patterns = CATEGORY_PERMISSION_PATTERNS[appCategory] || {};
+  const canonical = normalizeCategory(appCategory);
+  const patterns = CATEGORY_PERMISSION_PATTERNS[canonical] || {};
   const suspiciousPermissions: PermissionUsageAnalysis[] = [];
   const unusedDeclaredPermissions: PermissionUsageAnalysis[] = [];
 
-  let leakageScore = 0;
+  // Track scored permissions to prevent double-counting
+  const scoredPermissions = new Set<string>();
+  let rawLeakageScore = 0;
 
-  // Analyze each declared permission
+  // ── Phase 1: Pattern-based check (explicit false in category patterns) ──
+  console.log(`\n[Leakage Algo] Starting analysis for App (Category: ${canonical})`);
+  console.log(`[Leakage Algo] Declared Permissions: ${declaredPermissions.join(', ')}`);
+
   declaredPermissions.forEach(permission => {
-    const isTechnical = Object.values(userFriendlyPermissions).flat().includes(permission);
-    const isTypicallyUsed = patterns[permission] !== false;
-
-    if (!isTypicallyUsed && patterns[permission] !== undefined) {
-      // Permission declared but typically not used by this category
-      leakageScore += 25; // Increased from 20
+    if (scoredPermissions.has(permission)) return;
+    if (patterns[permission] === false) {
+      scoredPermissions.add(permission);
+      const points = getLeakagePoints(permission);
+      console.log(`[Leakage Algo] Phase 1 - Flagged unexpected pattern: ${permission} (+${points} pts)`);
+      rawLeakageScore += points;
       suspiciousPermissions.push({
         permission,
-        userFriendlyName: Object.keys(userFriendlyPermissions).find(
-          key => userFriendlyPermissions[key].includes(permission)
-        ) || permission,
+        userFriendlyName: resolveUserFriendlyName(permission, userFriendlyPermissions),
         isDeclared: true,
         typicalUsage: false,
-        leakageRisk: 'SUSPICIOUS',
-        recommendation: `${permission} is unusual for ${appCategory} apps. This could indicate data collection not related to core functionality.`
+        leakageRisk: getLeakageRisk(permission),
+        recommendation: getRiskRecommendation(permission, appCategory),
       });
     }
   });
 
-  // Check for dangerous combinations
-  const hasRecordAudio = declaredPermissions.includes('RECORD_AUDIO');
-  const hasLocation = declaredPermissions.some(p => 
-    p.includes('LOCATION') || p.includes('location')
+  // ── Phase 2: Universal high-risk checks (regardless of category patterns) ──
+
+  declaredPermissions.forEach(permission => {
+    if (scoredPermissions.has(permission)) return;
+
+    let flagged = false;
+    let points = 0;
+    let risk: 'SUSPICIOUS' | 'CRITICAL' = 'SUSPICIOUS';
+    let rec = '';
+
+    if (['READ_CALL_LOG', 'WRITE_CALL_LOG'].includes(permission)) {
+      flagged = true;
+      points = 40;
+      risk = 'CRITICAL';
+      rec = '🚨 Accessing your call log history is a severe privacy violation. Only the native Phone/Dialer app should ever need this. Do NOT install this app.';
+    } else if (['READ_SMS', 'SEND_SMS', 'WRITE_SMS'].includes(permission) && canonical !== 'Messaging') {
+      flagged = true;
+      points = 40;
+      risk = 'CRITICAL';
+      rec = '🚨 Accessing your text messages is a critical privacy violation — this app can read your banking OTPs and personal conversations. Do NOT install this app.';
+    } else if (permission.includes('LOCATION') && !LOCATION_SAFE_CATEGORIES.includes(canonical)) {
+      flagged = true;
+      points = permission.includes('FINE') ? 20 : 15;
+      risk = 'SUSPICIOUS';
+      rec = `${appCategory} apps don't need precise location tracking. This enables constant monitoring of your movements.`;
+    }
+
+    if (flagged) {
+      scoredPermissions.add(permission);
+      rawLeakageScore += points;
+      console.log(`[Leakage Algo] Phase 2 - Flagged universal risk: ${permission} (+${points} pts)`);
+      suspiciousPermissions.push({
+        permission,
+        userFriendlyName: resolveUserFriendlyName(permission, userFriendlyPermissions),
+        isDeclared: true,
+        typicalUsage: false,
+        leakageRisk: risk,
+        recommendation: rec,
+      });
+    }
+  });
+
+  // ── Phase 3: Combination risk — multiple dangerous perms together ──
+  const criticalPermsFound = suspiciousPermissions.filter(
+    p => p.leakageRisk === 'CRITICAL'
   );
-  const hasContacts = declaredPermissions.includes('READ_CONTACTS');
-  const hasCallLog = declaredPermissions.includes('READ_CALL_LOG');
-  const hasSMS = declaredPermissions.some(p => p.includes('SMS') || p.includes('PHONE_NUMBER'));
-
-  if (hasRecordAudio && appCategory === 'Games') {
-    leakageScore += 20; // Increased from 15
-    suspiciousPermissions.push({
-      permission: 'RECORD_AUDIO',
-      userFriendlyName: 'Microphone',
-      isDeclared: true,
-      typicalUsage: false,
-      leakageRisk: 'CRITICAL',
-      recommendation: 'Games should not need microphone access. This is a major privacy red flag.',
-    });
+  if (criticalPermsFound.length >= 2) {
+    // Dangerous combination: each additional critical perm amplifies risk
+    const combBonus = (criticalPermsFound.length - 1) * 10;
+    console.log(`[Leakage Algo] Phase 3 - Combination bonus applied: ${criticalPermsFound.length} critical perms (+${combBonus} pts)`);
+    rawLeakageScore += combBonus;
   }
 
-  if (hasContacts && !['Messaging', 'Social Media'].includes(appCategory)) {
-    leakageScore += 20; // Increased from 15
-    suspiciousPermissions.push({
-      permission: 'READ_CONTACTS',
-      userFriendlyName: 'Contacts',
-      isDeclared: true,
-      typicalUsage: false,
-      leakageRisk: 'CRITICAL',
-      recommendation: `${appCategory} apps typically don't need access to contacts. High data leakage risk.`,
-    });
-  } else if (hasContacts && appCategory === 'Social Media') {
-    // Even social media apps requesting contacts is suspicious
-    leakageScore += 15;
-    suspiciousPermissions.push({
-      permission: 'READ_CONTACTS',
-      userFriendlyName: 'Contacts',
-      isDeclared: true,
-      typicalUsage: false,
-      leakageRisk: 'CRITICAL',
-      recommendation: `Even for Social Media, requesting read access to contacts is questionable. Consider revoking this permission.`,
-    });
-  }
+  // ── Normalize with asymptotic decay curve ──
+  // k=0.025 means 40 raw pts → ~63% (CRITICAL), 20 pts → ~39% (MODERATE)
+  const k = 0.025;
+  const leakageScore = Math.min(
+    100,
+    Math.round(100 * (1 - Math.exp(-k * rawLeakageScore)))
+  );
 
-  if (hasCallLog) {
-    leakageScore += 30; // CRITICAL - call logs are extremely sensitive
-    suspiciousPermissions.push({
-      permission: 'READ_CALL_LOG',
-      userFriendlyName: 'Call Logs',
-      isDeclared: true,
-      typicalUsage: false,
-      leakageRisk: 'CRITICAL',
-      recommendation: `This app is requesting access to your call logs! This is a CRITICAL privacy violation. Do NOT install.`,
-    });
-  }
+  console.log(`[Leakage Algo] Final Raw Score: ${rawLeakageScore} -> Normalized: ${leakageScore}%\n`);
 
-  if (hasSMS) {
-    leakageScore += 30; // CRITICAL - SMS is extremely sensitive
-    suspiciousPermissions.push({
-      permission: 'READ_SMS',
-      userFriendlyName: 'SMS/Messages',
-      isDeclared: true,
-      typicalUsage: false,
-      leakageRisk: 'CRITICAL',
-      recommendation: `This app is requesting access to your text messages! This is a CRITICAL privacy violation. Do NOT install.`,
-    });
-  }
-
-  if (hasLocation && ![
-    'Maps', 'Travel & Local', 'Food & Drink', 'Shopping', 'Health', 'Weather', 'Photography', 'Lifestyle'
-  ].includes(appCategory)) {
-    leakageScore += 18; // Increased from 12
-    suspiciousPermissions.push({
-      permission: hasLocation ? 'ACCESS_FINE_LOCATION' : 'ACCESS_COARSE_LOCATION',
-      userFriendlyName: 'Precise Location',
-      isDeclared: true,
-      typicalUsage: false,
-      leakageRisk: 'SUSPICIOUS',
-      recommendation: `${appCategory} apps typically don't need precise location tracking. This enables constant user monitoring.`,
-    });
-  }
-
-  // Normalize leakage score
-  leakageScore = Math.min(100, Math.max(0, leakageScore));
-
-  let overallAssessment = '';
+  // ── Overall Assessment ──
+  let overallAssessment: string;
   if (leakageScore >= 60) {
-    overallAssessment = `🚨 CRITICAL LEAKAGE RISK: This ${appCategory} app requests ${suspiciousPermissions.length} suspicious permissions that don't align with typical usage. This app is likely collecting data well beyond what's needed for its core functionality. We strongly recommend NOT installing this app.`;
+    overallAssessment = `🚨 CRITICAL LEAKAGE RISK: This ${appCategory} app requests ${suspiciousPermissions.length} suspicious permission(s) that don't match its core function. It appears to be collecting data well beyond what's needed. We strongly recommend NOT installing it.`;
   } else if (leakageScore >= 30) {
-    overallAssessment = `⚠️ MODERATE RISK: This ${appCategory} app requests ${suspiciousPermissions.length} permission(s) that seem unnecessary. Review carefully before installing. Consider denying suspicious permissions if your device allows granular control.`;
+    overallAssessment = `⚠️ MODERATE RISK: This ${appCategory} app requests ${suspiciousPermissions.length} permission(s) that seem unnecessary for its category. Review carefully before installing.`;
   } else if (leakageScore > 0) {
     overallAssessment = `⚠️ MINOR CONCERN: This ${appCategory} app has ${suspiciousPermissions.length} permission request(s) that could be optimized. Generally acceptable, but stay alert.`;
   } else {
-    overallAssessment = `✅ LOW RISK: Permission requests align well with typical ${appCategory} app functionality. Appears to follow privacy best practices.`;
+    overallAssessment = `✅ LOW RISK: Permission requests align well with typical ${appCategory} app functionality. This app appears to follow privacy best practices.`;
   }
 
   return {
@@ -321,8 +410,32 @@ export function analyzePermissionUsage(
   };
 }
 
+function resolveUserFriendlyName(
+  permission: string,
+  userFriendlyPermissions: Record<string, string[]>
+): string {
+  const match = Object.keys(userFriendlyPermissions).find(
+    key => userFriendlyPermissions[key].includes(permission)
+  );
+  if (match) return match;
+
+  // Fallback: humanize the Android constant
+  const known: Record<string, string> = {
+    'ACCESS_FINE_LOCATION': 'Precise Location',
+    'ACCESS_COARSE_LOCATION': 'Approximate Location',
+    'CAMERA': 'Camera',
+    'RECORD_AUDIO': 'Microphone',
+    'READ_CONTACTS': 'Contacts',
+    'READ_CALL_LOG': 'Call Logs',
+    'READ_SMS': 'SMS Messages',
+    'READ_PHONE_STATE': 'Phone Identity',
+    'READ_CALENDAR': 'Calendar',
+  };
+  return known[permission] || permission;
+}
+
 /**
- * Generate data leakage indicators based on pattern analysis
+ * Generate leakage indicator flags from the suspicious permissions list.
  */
 export function generateLeakageIndicators(
   suspiciousPermissions: PermissionUsageAnalysis[]
@@ -346,7 +459,10 @@ export function generateLeakageIndicators(
     if (perm.permission === 'READ_CONTACTS') {
       indicators.hasUnexpectedContactAccess = true;
     }
-    if (perm.permission === 'READ_EXTERNAL_STORAGE' || perm.permission === 'ACCESS_MEDIA_LOCATION') {
+    if (
+      perm.permission === 'READ_EXTERNAL_STORAGE' ||
+      perm.permission === 'ACCESS_MEDIA_LOCATION'
+    ) {
       indicators.hasUnexpectedPhotoAccess = true;
     }
     if (perm.leakageRisk === 'CRITICAL') {

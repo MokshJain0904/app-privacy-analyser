@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ErrorType, AppError, createErrorResponse, logError } from '@/lib/error-handler';
 import { withRateLimit, RATE_LIMITS } from '@/middleware/rate-limit';
 
 interface TrackerInfo {
@@ -105,10 +106,12 @@ const APP_NAME_TO_PACKAGE: Record<string, string> = {
 
 function computeTrackerRisk(trackerCount: number): { score: number; level: string } {
   if (trackerCount === 0) return { score: 0, level: 'SAFE' };
-  if (trackerCount === 1) return { score: 10, level: 'SAFE' };
-  if (trackerCount <= 3) return { score: 40, level: 'MEDIUM' };
-  if (trackerCount <= 6) return { score: 65, level: 'RISKY' };
-  return { score: Math.min(100, 65 + (trackerCount - 6) * 5), level: 'RISKY' };
+  // Smooth power curve: each tracker adds diminishing marginal risk
+  // 1 tracker → ~14% SAFE, 2 → ~29% MEDIUM, 3 → ~45% MEDIUM
+  // 4 → ~62% RISKY, 5 → ~79% RISKY, 6+ → 90%+ RISKY
+  const raw = Math.min(100, Math.round(trackerCount * 12 + Math.pow(trackerCount, 1.4) * 2));
+  const level = raw >= 60 ? 'RISKY' : raw >= 25 ? 'MEDIUM' : 'SAFE';
+  return { score: raw, level };
 }
 
 async function handler(request: NextRequest) {
@@ -116,7 +119,11 @@ async function handler(request: NextRequest) {
     const { appName, packageName } = await request.json();
 
     if (!appName && !packageName) {
-      return NextResponse.json({ error: 'Either appName or packageName is required' }, { status: 400 });
+      const error = new AppError(
+        ErrorType.VALIDATION,
+        'Please provide either an app name or package name to check.'
+      );
+      return createErrorResponse(error);
     }
 
     // Resolve package ID to check
@@ -202,8 +209,14 @@ async function handler(request: NextRequest) {
       source,
     });
   } catch (error) {
-    console.error('Exodus error:', error);
-    return NextResponse.json({ error: 'Failed to fetch privacy report', details: String(error) }, { status: 500 });
+    const appError = error instanceof AppError
+      ? error
+      : new AppError(
+          ErrorType.API_ERROR,
+          'Failed to fetch privacy and tracker information. Please try again.'
+        );
+    logError(appError, { context: 'exodus_privacy_handler' });
+    return createErrorResponse(appError);
   }
 }
 

@@ -90,7 +90,6 @@ export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [comparisonResult, setComparisonResult] = useState<any>(null);
   const [showIntro, setShowIntro] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
   const [privacyTip, setPrivacyTip] = useState(PRIVACY_TIPS[0]);
   const [showSafePerms, setShowSafePerms] = useState(false);
   const [appSuggestions, setAppSuggestions] = useState<string[]>([]);
@@ -127,15 +126,10 @@ export default function Home() {
   const [leakageScrapedData, setLeakageScrapedData] = useState<any>(null);
 
   useEffect(() => {
-    const user = authService.getUser();
-    setUser(user);
     setPrivacyTip(PRIVACY_TIPS[Math.floor(Math.random() * PRIVACY_TIPS.length)]);
   }, []);
 
-  const handleLogout = () => {
-    authService.signOut();
-    router.push('/login');
-  };
+
 
   const togglePermission = (id: string) => {
     setSelectedPermissions(prev =>

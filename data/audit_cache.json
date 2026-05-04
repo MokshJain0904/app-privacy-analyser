@@ -1,5 +1,50 @@
 {
-  "instagram_Camera,Contacts,Location,Microphone,Notifications,Storage/Files": {
+  "snapchat_Camera,Contacts,Location,Notifications,Storage/Files": {
+    "permissions": [
+      {
+        "name": "Location",
+        "riskLevel": "Review Needed"
+      },
+      {
+        "name": "Contacts",
+        "riskLevel": "Safe"
+      },
+      {
+        "name": "Storage/Files",
+        "riskLevel": "Review Needed"
+      },
+      {
+        "name": "Camera",
+        "riskLevel": "Review Needed"
+      },
+      {
+        "name": "Notifications",
+        "riskLevel": "Safe"
+      }
+    ],
+    "summary": "The app Snapchat has a Calculated Risk Score of 55%, indicating a moderate level of risk. While core communication permissions like Location, Contacts, Storage/Files, and Camera are legitimately used for its intended functionality (e.g., Snap Map, finding friends, saving Snaps, taking photos/videos), the 'Notifications' permission is classified as 'High Risk' because it is not explicitly listed in the expected permissions for a communication app in this category. This suggests a potential for broader or less transparent notification management than anticipated.",
+    "alternatives": [
+      {
+        "name": "Signal",
+        "reason": "Known for its strong focus on privacy and end-to-end encryption for all communications, offering more transparent permission handling."
+      },
+      {
+        "name": "Telegram",
+        "reason": "Offers secure messaging with optional end-to-end encrypted 'Secret Chats' and generally provides more control over data and notifications."
+      },
+      {
+        "name": "WhatsApp",
+        "reason": "Provides end-to-end encryption for messages and calls by default, and its permission usage is generally well-documented for its communication features."
+      }
+    ],
+    "appName": "Snapchat",
+    "category": "Communication",
+    "overallRiskScore": 55,
+    "riskLabel": "Over-Permissive",
+    "isUnidentified": false,
+    "cachedAt": "2026-04-30T19:22:19.127Z"
+  },
+  "instagram_Camera,Contacts,Location,Microphone,Nearby Devices/Bluetooth,Notifications,Phone/Call Logs,Storage/Files": {
     "permissions": [
       {
         "name": "Location",
@@ -7,11 +52,15 @@
       },
       {
         "name": "Contacts",
-        "riskLevel": "High Risk"
+        "riskLevel": "Review Needed"
       },
       {
         "name": "Storage/Files",
-        "riskLevel": "High Risk"
+        "riskLevel": "Review Needed"
+      },
+      {
+        "name": "Notifications",
+        "riskLevel": "Safe"
       },
       {
         "name": "Camera",
@@ -19,63 +68,18 @@
       },
       {
         "name": "Microphone",
+        "riskLevel": "Review Needed"
+      },
+      {
+        "name": "Nearby Devices/Bluetooth",
         "riskLevel": "High Risk"
       },
       {
-        "name": "Notifications",
-        "riskLevel": "High Risk"
-      }
-    ],
-    "summary": "The calculated risk score for Instagram is 42%, indicating a moderate level of risk. While most critical permissions like Location, Contacts, Storage/Files, Camera, and Microphone align with expected social app functionality and are legitimately used for features such as tagging posts, finding friends, uploading/saving media, and creating video content, the app requests access to 'Notifications'. This permission is not explicitly listed in the 'Expected Permissions' for the Social category, leading to its classification as 'High Risk' according to the provided rules.",
-    "alternatives": [
-      {
-        "name": "Signal",
-        "reason": "Offers end-to-end encrypted messaging and group chats, with a strong focus on user privacy and minimal data collection, providing more transparent control over notifications."
-      },
-      {
-        "name": "Mastodon",
-        "reason": "A decentralized social network that gives users more control over their data and experience, often with more granular notification settings and a commitment to privacy."
-      },
-      {
-        "name": "Pixelfed",
-        "reason": "An open-source, decentralized photo-sharing platform designed as a privacy-focused alternative to Instagram, allowing users more control over their content and how they receive updates."
-      }
-    ],
-    "appName": "instagram",
-    "category": "Social",
-    "overallRiskScore": 42,
-    "riskLabel": "Over-Permissive",
-    "isUnidentified": false,
-    "cachedAt": "2026-04-28T03:02:46.664Z"
-  },
-  "snapchat_Camera,Contacts,Location,Microphone,Notifications,Storage/Files": {
-    "permissions": [
-      {
-        "name": "Location",
-        "riskLevel": "High Risk"
-      },
-      {
-        "name": "Contacts",
-        "riskLevel": "High Risk"
-      },
-      {
-        "name": "Storage/Files",
-        "riskLevel": "High Risk"
-      },
-      {
-        "name": "Notifications",
-        "riskLevel": "High Risk"
-      },
-      {
-        "name": "Camera",
-        "riskLevel": "High Risk"
-      },
-      {
-        "name": "Microphone",
+        "name": "Phone/Call Logs",
         "riskLevel": "High Risk"
       }
     ],
-    "summary": "This app has a Calculated Risk Score of 42%. We performed a deterministic static analysis because the AI engine was temporarily rate-limited.",
+    "summary": "This app has a Calculated Risk Score of 78%. We performed a deterministic static analysis because the AI engine was temporarily rate-limited.",
     "alternatives": [
       {
         "name": "Search F-Droid",
@@ -86,11 +90,11 @@
         "reason": "Using the website version of the app in a private browser often requires fewer permissions."
       }
     ],
-    "appName": "Snapchat",
-    "category": "Communication",
-    "overallRiskScore": 42,
-    "riskLabel": "Over-Permissive",
+    "appName": "Instagram",
+    "category": "Social",
+    "overallRiskScore": 78,
+    "riskLabel": "Risky",
     "isUnidentified": false,
-    "cachedAt": "2026-04-28T03:40:20.951Z"
+    "cachedAt": "2026-04-30T19:24:26.286Z"
   }
 }

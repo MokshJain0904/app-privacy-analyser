@@ -56,22 +56,6 @@ export function BeforeInstallationAnalyzer({
 
   return (
     <>
-      {/* App Header Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-        <div className="flex items-start gap-4 mb-6">
-          {appIcon && (
-            <img src={appIcon} alt={appName} className="w-20 h-20 rounded-lg" />
-          )}
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900">{appName}</h1>
-            <p className="text-gray-600 mt-1">{appCategory}</p>
-            <div className="flex gap-4 mt-3 text-sm text-gray-600">
-              {appRating && <span>⭐ {appRating}/5</span>}
-              {appDownloads && <span>📥 {appDownloads}</span>}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Summary Stats Card */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 mb-6">

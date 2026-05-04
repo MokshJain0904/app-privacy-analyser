@@ -7,8 +7,15 @@
 
 export interface CategoryPermissions {
   category: string;
-  expectedPermissions: string[];
+  /** Permissions that are completely normal for this category — show as Safe */
+  safePermissions: string[];
+  /** Permissions that are used but carry some risk — show as Review Needed */
+  reviewPermissions: string[];
+  /** Permissions that are unexpected/out-of-scope for this category — show as High Risk */
+  highRiskPermissions: string[];
   description: string;
+  /** Flat union kept for backwards-compat with calculateRiskScore */
+  expectedPermissions: string[];
 }
 
 // ============================================================
@@ -128,155 +135,292 @@ export function normalizeCategory(genre: string): CanonicalCategory {
 export const PERMISSIONS_DB: Record<CanonicalCategory, CategoryPermissions> = {
   'Social Media': {
     category: 'Social Media',
-    expectedPermissions: [
-      'INTERNET', 'CAMERA', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE',
-      'WRITE_EXTERNAL_STORAGE', 'ACCESS_NETWORK_STATE', 'VIBRATE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'READ_CONTACTS',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'READ_SMS', 'SEND_SMS',
+      'READ_CALL_LOG', 'READ_PHONE_STATE', 'BODY_SENSORS',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Social apps need camera, audio, and storage for content creation.',
   },
   'Messaging': {
     category: 'Messaging',
-    expectedPermissions: [
-      'INTERNET', 'READ_CONTACTS', 'RECORD_AUDIO', 'CAMERA',
-      'ACCESS_NETWORK_STATE', 'READ_PHONE_STATE', 'VIBRATE', 'WAKE_LOCK',
-      'READ_SMS', 'WRITE_SMS',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'READ_CONTACTS', 'VIBRATE', 'WAKE_LOCK',
+      'POST_NOTIFICATIONS', 'READ_SMS', 'WRITE_SMS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'READ_PHONE_STATE', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'BODY_SENSORS',
+      'READ_CALL_LOG', 'WRITE_CALL_LOG',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Messaging and calling apps require contacts, audio, and SMS access.',
   },
   'Maps & Navigation': {
     category: 'Maps & Navigation',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION',
-      'ACCESS_NETWORK_STATE', 'WAKE_LOCK',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'CAMERA',
+    ],
+    highRiskPermissions: [
+      'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'BODY_SENSORS',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Navigation apps strictly require high-accuracy location data.',
   },
   'Travel & Local': {
     category: 'Travel & Local',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION',
-      'ACCESS_NETWORK_STATE', 'CAMERA', 'READ_EXTERNAL_STORAGE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'CAMERA',
+      'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Travel and local guide apps require location data and internet access.',
   },
   'Photography': {
     category: 'Photography',
-    expectedPermissions: [
-      'CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_FINE_LOCATION',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'ACCESS_FINE_LOCATION',
+    ],
+    highRiskPermissions: [
+      'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Photo apps need camera, gallery storage, and geo-tagging.',
   },
   'Finance': {
     category: 'Finance',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'USE_BIOMETRIC', 'CAMERA', 'READ_PHONE_STATE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'USE_BIOMETRIC', 'CAMERA', 'READ_PHONE_STATE', 'USE_FINGERPRINT',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'READ_CONTACTS', 'READ_SMS', 'RECORD_AUDIO',
+      'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Financial apps use biometric auth, camera for QR/deposits, and device ID for fraud prevention.',
   },
   'Tools': {
     category: 'Tools',
-    expectedPermissions: [
+    safePermissions: [
       'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'WAKE_LOCK',
     ],
+    reviewPermissions: [
+      'CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS',
+      'READ_PHONE_STATE', 'READ_CALL_LOG',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Basic tools should have minimal permissions.',
   },
   'Lifestyle': {
     category: 'Lifestyle',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'READ_EXTERNAL_STORAGE',
-      'WRITE_EXTERNAL_STORAGE', 'ACCESS_COARSE_LOCATION',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'ACCESS_COARSE_LOCATION',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Lifestyle apps need media access and approximate location for local services.',
   },
   'Health & Fitness': {
     category: 'Health & Fitness',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_FINE_LOCATION',
-      'BLUETOOTH', 'USE_BIOMETRIC', 'READ_CALENDAR', 'BODY_SENSORS',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'BLUETOOTH',
+      'USE_BIOMETRIC', 'READ_CALENDAR', 'BODY_SENSORS',
+    ],
+    highRiskPermissions: [
+      'CAMERA', 'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Health apps need location for run tracking and Bluetooth for wearables.',
   },
   'Education': {
     category: 'Education',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'CAMERA', 'RECORD_AUDIO',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'READ_CONTACTS', 'READ_SMS', 'READ_PHONE_STATE', 'READ_CALL_LOG',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Educational apps need internet and may use camera/mic for interactive content.',
   },
   'Entertainment': {
     category: 'Entertainment',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'VIBRATE',
-      'READ_EXTERNAL_STORAGE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'ACCESS_FINE_LOCATION', 'READ_CONTACTS',
+      'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Streaming and media apps need internet and wake lock.',
   },
   'Shopping': {
     category: 'Shopping',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'CAMERA', 'READ_EXTERNAL_STORAGE',
-      'WRITE_EXTERNAL_STORAGE', 'ACCESS_COARSE_LOCATION',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'ACCESS_COARSE_LOCATION',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Shopping apps use camera for scanning barcodes and location for delivery.',
   },
   'Food & Drink': {
     category: 'Food & Drink',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_FINE_LOCATION',
-      'ACCESS_COARSE_LOCATION', 'CAMERA',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'CAMERA',
+    ],
+    highRiskPermissions: [
+      'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_EXTERNAL_STORAGE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Food apps need precise location for delivery and camera for food photos.',
   },
   'Weather': {
     category: 'Weather',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION',
+    ],
+    highRiskPermissions: [
+      'CAMERA', 'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Weather apps need location for local forecasts.',
   },
   'Sports': {
     category: 'Sports',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION',
+    ],
+    highRiskPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'READ_CONTACTS', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Sports apps need internet for live scores and updates.',
   },
   'Music & Audio': {
     category: 'Music & Audio',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'RECORD_AUDIO',
-      'READ_EXTERNAL_STORAGE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'CAMERA', 'READ_CONTACTS', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Music apps need internet, audio recording for voice features, and storage for offline content.',
   },
   'Beauty': {
     category: 'Beauty',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'CAMERA', 'READ_EXTERNAL_STORAGE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'READ_CONTACTS', 'RECORD_AUDIO', 'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Beauty apps use AR try-on features requiring the camera.',
   },
   'Business': {
     category: 'Business',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'CAMERA', 'RECORD_AUDIO',
-      'READ_CONTACTS', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'READ_CONTACTS', 'VIBRATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'ACCESS_FINE_LOCATION', 'READ_SMS', 'READ_PHONE_STATE', 'READ_CALL_LOG', 'BODY_SENSORS',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Business apps need camera and microphone for meetings.',
   },
   'Games': {
     category: 'Games',
-    expectedPermissions: [
-      'INTERNET', 'VIBRATE', 'WAKE_LOCK', 'ACCESS_NETWORK_STATE',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'VIBRATE', 'WAKE_LOCK', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'ACCESS_FINE_LOCATION', 'READ_CONTACTS',
+      'READ_SMS', 'READ_PHONE_STATE', 'READ_CALL_LOG',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'Games need internet for multiplayer and wake lock to stay active.',
   },
   'News & Magazines': {
     category: 'News & Magazines',
-    expectedPermissions: [
-      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK',
+    safePermissions: [
+      'INTERNET', 'ACCESS_NETWORK_STATE', 'WAKE_LOCK', 'VIBRATE', 'POST_NOTIFICATIONS',
     ],
+    reviewPermissions: [
+      'READ_EXTERNAL_STORAGE',
+    ],
+    highRiskPermissions: [
+      'CAMERA', 'RECORD_AUDIO', 'ACCESS_FINE_LOCATION', 'READ_CONTACTS',
+      'READ_SMS', 'READ_PHONE_STATE',
+    ],
+    get expectedPermissions() { return [...this.safePermissions, ...this.reviewPermissions]; },
     description: 'News apps need internet access for content delivery.',
   },
 };
@@ -289,6 +433,20 @@ export const getExpectedPermissions = (category: string): string[] => {
   const canonical = normalizeCategory(category);
   return PERMISSIONS_DB[canonical]?.expectedPermissions || [];
 };
+
+/**
+ * Returns the correct 3-tier risk level for a permission within a given category.
+ * Looks up safePermissions, reviewPermissions, and highRiskPermissions per category.
+ */
+export function getCategoryRiskLevel(permission: string, category: string): 'Safe' | 'Review Needed' | 'High Risk' {
+  const canonical = normalizeCategory(category);
+  const db = PERMISSIONS_DB[canonical];
+  if (!db) return 'High Risk';
+
+  if (db.safePermissions.includes(permission)) return 'Safe';
+  if (db.reviewPermissions.includes(permission)) return 'Review Needed';
+  return 'High Risk'; // Not in either safe or review list
+}
 
 // ============================================================
 // SENSITIVE PERMISSIONS — Risk Classification
@@ -347,6 +505,22 @@ export function findBasePermission(pName: string): string | undefined {
   if (!pName) return undefined;
   const upper = pName.toUpperCase().trim();
 
+  // 0. Map UI Labels to Android Permissions
+  const UI_LABEL_MAP: Record<string, string> = {
+    'LOCATION': 'ACCESS_FINE_LOCATION',
+    'MICROPHONE': 'RECORD_AUDIO',
+    'STORAGE/FILES': 'READ_EXTERNAL_STORAGE',
+    'PHONE/CALL LOGS': 'READ_PHONE_STATE',
+    'SMS': 'READ_SMS',
+    'CALENDAR': 'READ_CALENDAR',
+    'NOTIFICATIONS': 'POST_NOTIFICATIONS',
+    'NEARBY DEVICES/BLUETOOTH': 'BLUETOOTH',
+    'CONTACTS': 'READ_CONTACTS',
+    'CAMERA': 'CAMERA'
+  };
+
+  if (UI_LABEL_MAP[upper]) return UI_LABEL_MAP[upper];
+
   // 1. Exact match
   if (SENSITIVE_PERMISSIONS[upper]) return upper;
 
@@ -356,10 +530,8 @@ export function findBasePermission(pName: string): string | undefined {
   if (suffix && SENSITIVE_PERMISSIONS[suffix]) return suffix;
 
   // 3. Strict prefix match only: the raw name starts with a known key (or vice versa)
-  //    e.g. "ACCESS_BACKGROUND_LOCATION" starts with "ACCESS_FINE_LOCATION"? No — 
-  //    but "ACCESS_FINE_LOCATION_REDUCED_ACCURACY" starts with "ACCESS_FINE_LOCATION"
   const prefixMatch = Object.keys(SENSITIVE_PERMISSIONS).find(
-    sp => upper.startsWith(sp) || sp.startsWith(upper)
+    sp => upper.startsWith(sp) || sp.startsWith(upper) || upper.includes(sp) || sp.includes(upper)
   );
   return prefixMatch;
 }

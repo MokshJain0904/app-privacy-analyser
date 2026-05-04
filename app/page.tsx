@@ -34,19 +34,13 @@ import {
   Sun
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { authService, type User } from '@/lib/auth-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
 import { useTheme } from '@/components/ThemeProvider';
 import { validateAppName, sanitizeAppName } from '@/lib/input-validation';
 import { sanitizeInput } from '@/lib/sanitization';
-import { PermissionAnalyzer } from '@/components/PermissionAnalyzer';
 import { BeforeInstallationAnalyzer } from '@/components/BeforeInstallationAnalyzer';
-import { PrivacyAnalysisPanel } from '@/components/PrivacyAnalysisPanel';
-import { 
-  getRiskLevel,
-  type PermissionRecommendation 
-} from '@/lib/permission-recommendations';
+
 import {
   convertTechnicalPermissionsToUserFriendly,
   getUserFriendlyToTechnical,

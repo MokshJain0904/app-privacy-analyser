@@ -28,6 +28,13 @@ function getCacheKey(appName: string, permissions: string[]) {
   return `${appName.toLowerCase()}_${permissions.slice().sort().join(',')}`;
 }
 
+function getCompareCacheKey(app1: string, app2: string) {
+  const a = (app1 || '').toLowerCase().trim();
+  const b = (app2 || '').toLowerCase().trim();
+  const [x, y] = [a, b].sort();
+  return `compare_${x}__${y}`;
+}
+
 export function saveToAuditCache(appName: string, permissions: string[], analysisResult: any) {
   try {
     const cache = getAuditCache();
@@ -39,6 +46,26 @@ export function saveToAuditCache(appName: string, permissions: string[], analysi
     fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
   } catch (error) {
     console.error('Error writing to audit cache:', error);
+  }
+}
+
+export function getFromCompareCache(app1: string, app2: string): any | null {
+  const cache = getAuditCache();
+  const key = getCompareCacheKey(app1, app2);
+  return cache[key] || null;
+}
+
+export function saveToCompareCache(app1: string, app2: string, comparisonResult: any) {
+  try {
+    const cache = getAuditCache();
+    const key = getCompareCacheKey(app1, app2);
+    cache[key] = {
+      ...comparisonResult,
+      cachedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('Error writing compare cache:', error);
   }
 }
 

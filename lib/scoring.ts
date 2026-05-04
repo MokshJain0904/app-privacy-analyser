@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getExpectedPermissions, SENSITIVE_PERMISSIONS, findBasePermission } from '@/lib/permissions-db';
+import { getExpectedPermissions, SENSITIVE_PERMISSIONS, findBasePermission, getCategoryRiskLevel, normalizeCategory } from '@/lib/permissions-db';
 
 const CONFIG_PATH = path.join(process.cwd(), 'config', 'scoring-weights.json');
 
@@ -72,10 +72,10 @@ export async function calculateRiskScore(permissions: any[], category: string) {
 export function normalizeScore(rawScore: number, totalPermissions: number) {
   if (rawScore === 0) return 0;
   
-  // Asymptotic Decay Curve
-  // Eliminates dilution bug where 50 safe permissions mask 1 high risk
-  // k is tuned so ~1 High Risk Unexpected (25 points) shoots score to 60%.
-  const k = 0.036; 
+  // Asymptotic Decay Curve, tuned so a typical risky-but-not-extreme app
+  // (e.g. 1 High Risk unexpected + 3 Review Needed) lands in the 35-55% range.
+  // k=0.022: 20 raw pts → ~36%, 29 pts → ~47%, 50 pts → ~67%, 80 pts → ~83%
+  const k = 0.022;
   const normalized = 100 * (1 - Math.exp(-k * rawScore));
   
   return Math.min(100, Math.round(normalized));
@@ -91,24 +91,19 @@ export function recalculateScoreFromRiskLevels(
 ): number {
   if (!permissions || permissions.length === 0) return 0;
 
-  // Count permissions by risk level
-  const safeCount = permissions.filter(p => p.riskLevel === 'Safe').length;
-  const reviewCount = permissions.filter(p => p.riskLevel === 'Review Needed').length;
-  const highRiskCount = permissions.filter(p => p.riskLevel === 'High Risk').length;
-
-  // Get current weights
   const weights = getWeights();
 
-  // Calculate raw score assuming these are all unexpected permissions
-  // (conservative approach - we don't know if they're expected or not from just risk levels)
-  const rawScore =
-    (safeCount * weights.safeUnexpected) +
-    (reviewCount * weights.reviewNeededUnexpected) +
-    (highRiskCount * weights.highRiskUnexpected);
+  // After our 2-phase classification:
+  //   Safe         = permission is legitimate and expected  → 0 pts
+  //   Review Needed = permission is used but carries risk   → reviewNeededExpected pts
+  //   High Risk     = permission is genuinely unexpected    → highRiskUnexpected pts
+  const rawScore = permissions.reduce((sum, p) => {
+    if (p.riskLevel === 'High Risk')    return sum + weights.highRiskUnexpected;
+    if (p.riskLevel === 'Review Needed') return sum + weights.reviewNeededExpected;
+    return sum; // Safe → 0
+  }, 0);
 
-  // Normalize and return
-  const normalized = normalizeScore(rawScore, permissions.length);
-  return normalized;
+  return normalizeScore(rawScore, permissions.length);
 }
 
 /**
@@ -121,36 +116,16 @@ export function getRiskLabelFromScore(score: number): string {
 }
 
 /**
- * STRICT CATEGORY-BASED SCORING
- * If permission is NOT expected for this category → HIGH RISK
- * If permission IS expected → Check if sensitive (Review Needed) or safe (Safe)
- * 
- * Used for deterministic permission risk classification
+ * STRICT CATEGORY-BASED SCORING (3-tier)
+ * Uses the safePermissions / reviewPermissions tiers from PERMISSIONS_DB.
+ * Falls back to High Risk for anything not listed.
  */
 export function getStrictCategoryBasedRiskLevel(
   permission: string,
-  expectedPermissionsForCategory: string[],
-  allSensitivePermissions: Record<string, string>
+  _expectedPermissionsForCategory: string[], // kept for API compat, unused
+  _allSensitivePermissions: Record<string, string>, // kept for API compat, unused
+  category: string = '' // new: pass the actual category string
 ): string {
-  // First check: Is this permission expected for this category?
-  const isExpected = expectedPermissionsForCategory.includes(permission);
-
-  // If NOT expected → ALWAYS HIGH RISK
-  if (!isExpected) {
-    return 'High Risk';
-  }
-
-  // If expected, check if it's sensitive
-  const riskLevel = allSensitivePermissions[permission];
-  
-  if (riskLevel === 'High Risk') {
-    // Expected High Risk permission = Review Needed (user is aware they're granting it)
-    return 'Review Needed';
-  } else if (riskLevel === 'Review Needed') {
-    // Expected Review permission = Safe in this context
-    return 'Safe';
-  } else {
-    // Safe permissions are always Safe
-    return 'Safe';
-  }
+  const mapped = findBasePermission(permission) || permission.toUpperCase();
+  return getCategoryRiskLevel(mapped, category);
 }

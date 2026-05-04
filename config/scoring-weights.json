@@ -1,8 +1,8 @@
 {
   "highRiskExpected": 5,
-  "highRiskUnexpected": 25,
-  "reviewNeededExpected": 2,
-  "reviewNeededUnexpected": 10,
+  "highRiskUnexpected": 20,
+  "reviewNeededExpected": 3,
+  "reviewNeededUnexpected": 8,
   "safeExpected": 0,
-  "safeUnexpected": 2
+  "safeUnexpected": 1
 }

@@ -828,12 +828,7 @@ export default function Home() {
                 Compare
               </button>
             </nav>
-            {user && (
               <div className="flex items-center gap-2 sm:gap-4">
-                <div className="hidden lg:block text-right">
-                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{user.email}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Active Session</p>
-                </div>
                 <button
                   onClick={toggleTheme}
                   className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
@@ -845,14 +840,7 @@ export default function Home() {
                     <Sun className="w-5 h-5" />
                   )}
                 </button>
-                <button
-                  onClick={handleLogout}
-                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-                >
-                  Logout
-                </button>
               </div>
-            )}
           </div>
         </div>
         {/* Mobile Navigation Menu */}

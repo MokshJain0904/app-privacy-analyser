@@ -18,6 +18,7 @@ const nextConfig = {
 	},
 	allowedDevOrigins: ["*.theopenbuilder.com"],
 	devIndicators: false,
+	serverExternalPackages: ["google-play-scraper"],
 };
 
 export default nextConfig;
